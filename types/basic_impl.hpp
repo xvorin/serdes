@@ -8,7 +8,8 @@
 namespace xvorin::serdes {
 
 template <typename T>
-BasicParameter<T>::TraitedParameter(std::string subkey, size_t offset, std::string comment, inform_type inform, std::string verinfo)
+BasicParameter<T>::TraitedParameter(std::string subkey, size_t offset,
+    std::string comment, informant inform, std::string verinfo)
     : Parameter(std::move(subkey), ParameterType::PT_BASIC, typeid(T), offset, std::move(comment), std::move(verinfo))
     , inform(std::move(inform))
 {
@@ -18,10 +19,10 @@ BasicParameter<T>::TraitedParameter(std::string subkey, size_t offset, std::stri
 template <typename T>
 std::shared_ptr<Parameter> BasicParameter<T>::clone(std::string newkey, size_t newoffset) const
 {
-    auto retval = std::make_shared<BasicParameter<T>>(std::move(newkey), newoffset, comment, inform, verinfo);
-    retval->parent = parent;
-    retval->value = value;
-    return retval;
+    auto cloned = std::make_shared<BasicParameter<T>>(std::move(newkey), newoffset, comment, inform, verinfo);
+    cloned->parent = parent;
+    cloned->value = value;
+    return cloned;
 }
 
 template <typename T>
@@ -40,6 +41,15 @@ template <typename T>
 void BasicParameter<T>::from_string(const std::string& in)
 {
     value = xvorin::serdes::from_string<T>(in);
+}
+
+template <typename T>
+void BasicParameter<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
+{
+    auto p = parent.lock();
+    if (p) {
+        p->inform_ancestor(index, pit);
+    }
 }
 
 template <typename T>
@@ -81,15 +91,6 @@ std::string BasicParameter<T>::debug_releation(const std::string& prefix) const
     //        << prefix << "    |PARENT:" << (p ? p->debug_self() : "null");
     // }
     return ss.str();
-};
-
-template <typename T>
-void BasicParameter<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
-{
-    auto p = parent.lock();
-    if (p) {
-        p->inform_ancestor(index, pit);
-    }
 }
 
 }

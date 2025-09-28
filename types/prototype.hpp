@@ -7,15 +7,36 @@ namespace xvorin::serdes {
 
 struct ParameterPrototype {
 public:
-    template <typename T = Parameter>
-    static std::shared_ptr<T> create_parameter(const ParameterDetailType& type, const std::string& newkey, size_t offset = 0)
+    static std::shared_ptr<Parameter> create_parameter(const ParameterDetailType& type, const std::string& newkey, size_t offset = 0)
     {
-        auto temp = ParameterPrototype::prototype<T>(type);
-        if (!temp) {
+        auto proto = ParameterPrototype::query_prototype(type);
+        if (!proto) {
             throw PrototypeNotFound(Parameter::readable_detail_type(type) + " for " + newkey);
         }
 
-        return std::static_pointer_cast<T>(temp->clone(newkey, offset));
+        std::shared_ptr<Parameter> created = proto->clone(newkey, offset);
+
+        if (created->type != ParameterType::PT_OBJECT) {
+            return created;
+        }
+
+        auto children = created->mutable_children();
+
+        for (auto& child_pair : (*children)) {
+            auto& ochild = child_pair.second;
+            if (ochild->type != ParameterType::PT_OBJECT) {
+                continue;
+            }
+
+            auto nchild = ParameterPrototype::create_parameter(ochild->detail, ochild->subkey, ochild->offset);
+            const_cast<std::string&>(nchild->comment) = (nchild->comment.size() > ochild->comment.size()) ? nchild->comment : ochild->comment;
+            const_cast<std::string&>(nchild->verinfo) = (nchild->verinfo.size() > ochild->verinfo.size()) ? nchild->verinfo : ochild->verinfo;
+            nchild->parent = created;
+
+            ochild.swap(nchild);
+        }
+
+        return created;
     }
 
     static std::string debug_string()
@@ -42,15 +63,14 @@ private:
         return prototypes;
     }
 
-    template <typename T = Parameter>
-    static std::shared_ptr<T> prototype(const ParameterDetailType& type)
+    static std::shared_ptr<Parameter> query_prototype(const ParameterDetailType& type)
     {
         const auto& prototypes = container();
         auto iter = prototypes.find(type);
-        return iter == prototypes.end() ? nullptr : std::dynamic_pointer_cast<T>(iter->second);
+        return (iter == prototypes.end()) ? nullptr : iter->second;
     }
 
-    static void insert_prototype(const ParameterDetailType& type, std::shared_ptr<Parameter> templ)
+    static void insert_prototype(const ParameterDetailType& type, std::shared_ptr<Parameter> proto)
     {
         auto& prototypes = container();
         auto iter = prototypes.find(type);
@@ -58,10 +78,9 @@ private:
         if (iter != prototypes.end()) {
             throw PrototypeDuplicate(Parameter::readable_detail_type(type));
         }
-        prototypes[type] = templ;
+        prototypes[type] = proto;
     }
 
     friend class ParameterRegistrar;
 };
-
 }

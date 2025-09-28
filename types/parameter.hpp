@@ -78,7 +78,7 @@ public:
      * 数据的序列化与反序列化
      * **序列化指从 内部数据结构 转换为 外部结构
      * **反序列化指从 外部结构 转换为 内部数据结构
-     * **以上外部结构包括但不限于 C/C++对象、JSON、YAML 等
+     * **以上外部结构包括但不限于 C/C++对象、JSON、YAML、TOML、Protobuf 等
      */
     virtual void serialize(void* out) const = 0;
     virtual void deserialize(const void* in) = 0;
@@ -89,19 +89,20 @@ public:
     virtual void from_string(const std::string& in) { }
 
     /**
-     * 参数的调试信息
-     */
-    virtual std::string debug_self() const = 0;
-    virtual std::string debug_releation(const std::string& prefix = "") const = 0;
-
-    /**
      * 只有复合类型需要实现以下子节点相关接口
      */
     virtual void create_child(const std::string& newkey) { }
     virtual void remove_child(const std::string& subkey) { }
     virtual std::shared_ptr<Parameter> find_child(const std::string& subkey) const { return nullptr; }
-    virtual size_t children_size() const { return 0; }
-    virtual std::unordered_map<std::string, std::shared_ptr<Parameter>> get_children() const { return {}; }
+    virtual const std::unordered_map<std::string, std::shared_ptr<Parameter>>& children() const
+    {
+        static const std::unordered_map<std::string, std::shared_ptr<Parameter>> empty_children;
+        return empty_children;
+    }
+    virtual std::unordered_map<std::string, std::shared_ptr<Parameter>>* mutable_children()
+    {
+        return nullptr;
+    }
 
     /**
      * 参数变更通知
@@ -136,6 +137,12 @@ public:
 
         throw NeedRootProfile();
     }
+
+    /**
+     * 参数的调试信息
+     */
+    virtual std::string debug_self() const = 0;
+    virtual std::string debug_releation(const std::string& prefix = "") const = 0;
 
     /**
      * 获取ParameterType可读字符串

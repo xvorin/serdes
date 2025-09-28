@@ -127,7 +127,7 @@ template <typename T>
 ParameterTree<T>::ParameterTree(const std::string& root)
 {
     // 构造model
-    auto model = ParameterPrototype::create_parameter<TraitedParameter<T>>(typeid(T), root);
+    auto model = ParameterPrototype::create_parameter(typeid(T), root);
     if (!model) {
         throw std::runtime_error(std::string("No Parameter prototype for ") + Parameter::readable_detail_type(typeid(T)));
     }

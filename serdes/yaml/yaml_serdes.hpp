@@ -3,7 +3,11 @@
 #include "serdes/serdes/serdes.hpp"
 #include "serdes/types/traits.hpp"
 
-#include <yaml-cpp/yaml.h>
+#include <fkYAML/node.hpp>
+
+namespace fkyaml {
+using ordered_node = basic_node<std::vector, fkyaml::ordered_map>;
+}
 
 namespace xvorin::serdes {
 
@@ -17,17 +21,17 @@ class YamlSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public 
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        auto& yout = (*static_cast<YAML::Node*>(out));
-
-        yout = YAML::Node(parameter->value);
+        auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
+        yout = parameter->value;
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
-        auto& yin = (*static_cast<const YAML::Node*>(in));
-
-        parameter->value = yin.as<T>();
+        auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
+        if (!yin.is_null()) {
+            parameter->value = yin.get_value<T>();
+        }
     }
 };
 
@@ -37,17 +41,15 @@ class YamlSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public S
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        auto& yout = (*static_cast<YAML::Node*>(out));
-
-        yout = YAML::Node(static_cast<int>(parameter->value));
+        auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
+        yout = static_cast<int>(parameter->value);
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
-        auto& yin = (*static_cast<const YAML::Node*>(in));
-
-        parameter->value = static_cast<T>(yin.as<int>());
+        auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
+        parameter->value = static_cast<T>(yin.as_int());
     }
 };
 
@@ -57,10 +59,11 @@ class YamlSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        auto& yout = (*static_cast<YAML::Node*>(out));
+        auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
+        yout = fkyaml::ordered_node::mapping();
 
-        for (auto& child : parameter->sorted_children()) {
-            YAML::Node ychild = yout[child->subkey];
+        for (const auto& child : parameter->sorted_children()) {
+            auto& ychild = yout[child->subkey];
             child->serialize(&ychild);
         }
     }
@@ -68,23 +71,19 @@ class YamlSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
-        auto& yin = (*static_cast<const YAML::Node*>(in));
+        auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
+        if (!yin.is_mapping()) {
+            return;
+        }
 
-        for (auto& cpair : parameter->children) {
-            auto& child = cpair.second;
+        for (const auto& child_pair : parameter->children()) {
+            auto& child = child_pair.second;
 
-            auto ychild = yin[child->subkey];
-            if (!ychild.IsDefined()) {
+            if (!yin.contains(child->subkey)) {
                 continue;
             }
 
-            if (child->type == ParameterType::PT_OBJECT) {
-                auto object = ParameterPrototype::create_parameter(child->detail, child->subkey, child->offset);
-                child.swap(object);
-                child->parent = parameter;
-                child->deserialize(&ychild);
-                continue;
-            }
+            const auto& ychild = yin[child->subkey];
             child->deserialize(&ychild);
         }
     }
@@ -96,32 +95,34 @@ class YamlSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : publ
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        auto& yout = (*static_cast<YAML::Node*>(out));
-        yout = YAML::Node(YAML::NodeType::Sequence);
+        auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
+        yout = fkyaml::ordered_node::sequence();
 
-        for (auto& child : parameter->sorted_children()) {
-            YAML::Node ychild;
+        for (const auto& child : parameter->sorted_children()) {
+            fkyaml::ordered_node ychild;
             child->serialize(&ychild);
-            yout.push_back(ychild);
+            yout.as_seq().push_back(ychild);
         }
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
-        auto& yin = (*static_cast<const YAML::Node*>(in));
-        if (!yin.IsSequence()) {
+        auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
+        if (!yin.is_sequence()) {
             return;
         }
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         size_t counter = 0;
         for (const auto& ychild : yin) {
             const auto subkey = std::to_string(counter++);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&ychild);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&ychild);
+            children->emplace(subkey, child);
         }
     }
 };
@@ -132,11 +133,11 @@ class YamlSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        auto& yout = (*static_cast<YAML::Node*>(out));
-        yout = YAML::Node(YAML::NodeType::Map);
+        auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
+        yout = fkyaml::ordered_node::mapping();
 
-        for (auto& child : parameter->sorted_children()) {
-            auto ychild = yout[child->subkey];
+        for (const auto& child : parameter->sorted_children()) {
+            auto& ychild = yout[child->subkey];
             child->serialize(&ychild);
         }
     }
@@ -144,19 +145,21 @@ class YamlSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
-        auto& yin = (*static_cast<const YAML::Node*>(in));
-        if (!yin.IsMap()) {
+        auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
+        if (!yin.is_mapping()) {
             return;
         }
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
-        for (const auto& ypair : yin) {
-            const auto subkey = ypair.first.as<std::string>();
-            const auto ychild = YAML::Node(ypair.second);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&ychild);
+        for (const auto& ypair : yin.map_items()) {
+            const auto& subkey = ypair.key().as_str();
+            const auto& ychild = ypair.value();
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&ychild);
+            children->emplace(subkey, child);
         }
     }
 };
@@ -167,32 +170,34 @@ class YamlSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Se
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        auto& yout = (*static_cast<YAML::Node*>(out));
-        yout = YAML::Node(YAML::NodeType::Sequence);
+        auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
+        yout = fkyaml::ordered_node::sequence();
 
-        for (auto& child : parameter->sorted_children()) {
-            YAML::Node ychild;
+        for (const auto& child : parameter->sorted_children()) {
+            fkyaml::ordered_node ychild;
             child->serialize(&ychild);
-            yout.push_back(ychild);
+            yout.as_seq().push_back(ychild);
         }
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
-        auto& yin = (*static_cast<const YAML::Node*>(in));
-        if (!yin.IsSequence()) {
+        auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
+        if (!yin.is_sequence()) {
             return;
         }
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         size_t counter = 0;
         for (const auto& ychild : yin) {
             const auto subkey = std::to_string(counter++);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&ychild);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&ychild);
+            children->emplace(subkey, child);
         }
     }
 };

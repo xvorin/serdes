@@ -35,7 +35,7 @@ ParameterType trait_type()
 
 template <typename T>
 Composite<T>::Composite(std::string subkey, ParameterDetailType detail, size_t offset,
-    std::string comment, inform_type inform, std::string verinfo)
+    std::string comment, informant inform, std::string verinfo)
     : Parameter(std::move(subkey), trait_type<T>(), detail, offset, std::move(comment), std::move(verinfo))
     , inform(std::move(inform))
 {
@@ -45,15 +45,15 @@ Composite<T>::Composite(std::string subkey, ParameterDetailType detail, size_t o
 template <typename T>
 std::shared_ptr<Parameter> Composite<T>::clone(std::string newkey, size_t newoffset) const
 {
-    auto retval = std::make_shared<TraitedParameter<T>>(std::move(newkey), newoffset, comment, inform, verinfo);
-    retval->parent = parent;
+    auto cloned = std::make_shared<TraitedParameter<T>>(std::move(newkey), newoffset, comment, inform, verinfo);
+    cloned->parent = parent;
 
-    for (auto& child : children) {
-        auto retval_child = child.second->clone(child.second->subkey, child.second->offset);
-        retval_child->parent = retval;
-        retval->children[child.first] = retval_child;
+    for (const auto& child : children()) {
+        auto cloned_child = child.second->clone(child.second->subkey, child.second->offset);
+        cloned_child->parent = cloned;
+        cloned->mutable_children()->emplace(child.first, cloned_child);
     }
-    return retval;
+    return cloned;
 }
 
 template <typename T>
@@ -69,10 +69,41 @@ void Composite<T>::deserialize(const void* in)
 }
 
 template <typename T>
+std::shared_ptr<Parameter> Composite<T>::find_child(const std::string& subkey) const
+{
+    auto iter = children_.find(subkey);
+    return (iter == children_.end()) ? nullptr : iter->second;
+}
+
+template <typename T>
+const std::unordered_map<std::string, std::shared_ptr<Parameter>>& Composite<T>::children() const
+{
+    return children_;
+}
+
+template <typename T>
+std::unordered_map<std::string, std::shared_ptr<Parameter>>* Composite<T>::mutable_children()
+{
+    return &children_;
+}
+
+template <typename T>
+void Composite<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
+{
+    if (inform) {
+        inform(index, pit);
+    }
+    auto p = parent.lock();
+    if (p) {
+        p->inform_ancestor(index, pit);
+    }
+}
+
+template <typename T>
 std::string Composite<T>::debug_self() const
 {
     std::stringstream ss;
-    ss << " size = " << children.size();
+    ss << " size = " << children_.size();
     if (!comment.empty()) {
         ss << " #" << comment;
     }
@@ -82,7 +113,7 @@ std::string Composite<T>::debug_self() const
     return ss.str();
 
     // std::stringstream ss;
-    // ss << " size = " << children.size() << " ";
+    // ss << " size = " << children_.size() << " ";
     // ss << "[类型:" << readable_type() << "/" << readable_detail_type();
     // ss << ";偏移:" << offset;
     // if (!comment.empty()) {
@@ -109,7 +140,7 @@ std::string Composite<T>::debug_releation(const std::string& prefix) const
     // }
 
     // ss << std::endl
-    //    << prefix << "    |CHILDREN:" << children.size();
+    //    << prefix << "    |CHILDREN:" << children_.size();
 
     for (auto& child : sorted_children()) {
         ss << std::endl
@@ -120,43 +151,12 @@ std::string Composite<T>::debug_releation(const std::string& prefix) const
 }
 
 template <typename T>
-std::shared_ptr<Parameter> Composite<T>::find_child(const std::string& subkey) const
-{
-    auto iter = children.find(subkey);
-    return (iter == children.end()) ? nullptr : iter->second;
-}
-
-template <typename T>
-size_t Composite<T>::children_size() const
-{
-    return children.size();
-}
-
-template <typename T>
-std::unordered_map<std::string, std::shared_ptr<Parameter>> Composite<T>::get_children() const
-{
-    return children;
-}
-
-template <typename T>
-void Composite<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
-{
-    if (inform) {
-        inform(index, pit);
-    }
-    auto p = parent.lock();
-    if (p) {
-        p->inform_ancestor(index, pit);
-    }
-}
-
-template <typename T>
 void Composite<T>::insert_child(std::shared_ptr<Parameter> param)
 {
     if (!param) {
         return;
     }
-    children[param->subkey] = param;
+    children_[param->subkey] = param;
     param->parent = shared_from_this();
 }
 
@@ -172,7 +172,7 @@ std::list<std::shared_ptr<Parameter>> Composite<T>::sorted_children(SortCompareC
     }
 
     std::list<std::shared_ptr<Parameter>> sorted;
-    for (auto& child : children) {
+    for (auto& child : children_) {
         sorted.push_back(child.second);
     }
 

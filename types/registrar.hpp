@@ -25,7 +25,7 @@ public:
     template <typename P, typename M> //[P]arent & [M]ember
     struct RegisterParameter<P, M, typename std::enable_if<is_composite<M>::value>::type> {
         RegisterParameter(std::string subkey, size_t offset, std::string comment = "",
-            typename TraitedParameter<M>::inform_type cb = nullptr, std::string verinfo = "")
+            typename TraitedParameter<M>::informant cb = nullptr, std::string verinfo = "")
         {
             constexpr bool enable = std::is_pointer<M>::value || std::is_reference<M>::value || std::is_const<M>::value;
             static_assert(!enable, "Do not support pointer, reference or const type");
@@ -51,7 +51,7 @@ public:
     template <typename P, typename M> //[P]arent & [M]ember
     struct RegisterParameter<P, M, typename std::enable_if<!is_composite<M>::value>::type> {
         RegisterParameter(std::string subkey, size_t offset, std::string comment = "",
-            typename TraitedParameter<M>::inform_type cb = nullptr, std::string verinfo = "")
+            typename TraitedParameter<M>::informant cb = nullptr, std::string verinfo = "")
         {
             constexpr bool enable = std::is_pointer<M>::value || std::is_reference<M>::value || std::is_const<M>::value;
             static_assert(!enable, "Do not support pointer, reference or const type");
@@ -84,9 +84,9 @@ public:
             // 保存 父结构体类型 到类型模板容器中
             auto parent = SavePrototypeHelper<P>::save();
             // 删除 成员
-            auto iter = parent->children.find(subkey);
-            if (iter != parent->children.end()) {
-                parent->children.erase(iter);
+            auto iter = parent->mutable_children().find(subkey);
+            if (iter != parent->mutable_children().end()) {
+                parent->mutable_children().erase(iter);
             }
         }
     };
@@ -94,7 +94,7 @@ public:
     template <typename R> //[R]oot
     struct RegisterRoot {
         RegisterRoot(size_t offset, const std::string& comment = "",
-            typename TraitedParameter<R>::inform_type cb = nullptr, const std::string& verinfo = "")
+            typename TraitedParameter<R>::informant cb = nullptr, const std::string& verinfo = "")
         {
             constexpr bool enable = std::is_pointer<R>::value || std::is_reference<R>::value || std::is_const<R>::value;
             static_assert(!enable, "Do not support pointer, reference or const type");
@@ -111,7 +111,7 @@ public:
                 const_cast<std::string&>(root->verinfo) = verinfo;
             }
             if (cb) {
-                const_cast<typename TraitedParameter<R>::inform_type&>(root->inform) = std::move(cb);
+                const_cast<typename TraitedParameter<R>::informant&>(root->inform) = std::move(cb);
             }
         }
     };
@@ -143,8 +143,12 @@ private:
         using W = TraitedParameter<T>; // [W]rapper
         static std::shared_ptr<W> save()
         {
-            auto t = ParameterPrototype::prototype<W>(typeid(T));
-            return t ? t : (t = std::make_shared<W>("prototype", 0, "", nullptr, ""), ParameterPrototype::insert_prototype(typeid(T), t), t);
+            auto proto = ParameterPrototype::query_prototype(typeid(T));
+            if (!proto) {
+                proto = std::make_shared<W>("prototype", 0, "", nullptr, "");
+                ParameterPrototype::insert_prototype(typeid(T), proto);
+            }
+            return std::static_pointer_cast<W>(proto);
         }
     };
 
@@ -154,8 +158,13 @@ private:
         static std::shared_ptr<W> save()
         {
             SavePrototypeHelper<typename W::subtype>::save(); // 递归保存子类型
-            auto t = ParameterPrototype::prototype<W>(typeid(T));
-            return t ? t : (t = std::make_shared<W>("prototype", 0, "", nullptr, ""), ParameterPrototype::insert_prototype(typeid(T), t), t);
+
+            auto proto = ParameterPrototype::query_prototype(typeid(T));
+            if (!proto) {
+                proto = std::make_shared<W>("prototype", 0, "", nullptr, "");
+                ParameterPrototype::insert_prototype(typeid(T), proto);
+            }
+            return std::static_pointer_cast<W>(proto);
         }
     };
 };

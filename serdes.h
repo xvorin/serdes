@@ -193,7 +193,7 @@ void CommandLineAPI<T>::load()
     {
         std::lock_guard<std::mutex> guard(sink_content_lock_);
         if (content == sink_content_) {
-            std::cout << "With same content, no need to parse!" << std::endl;
+            std::cout << "with same content, no need to parse!" << std::endl;
             return;
         }
     }

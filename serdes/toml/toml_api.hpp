@@ -31,7 +31,7 @@ void TomlAPI<T>::from_toml(const std::string& s)
 template <typename T>
 void TomlAPI<T>::from_toml(const std::string& index, const std::string& s)
 {
-    toml::value tin;
+    toml::ordered_value tin;
     try {
         tin = toml::parse_str(s);
     } catch (std::exception& e) {
@@ -53,7 +53,7 @@ std::string TomlAPI<T>::to_toml(const std::string& index)
 {
     tree_.commit_value_changes();
 
-    toml::value tout;
+    toml::ordered_value tout;
     tree_.serialize(tree_.parameter(index), &tout, ParameterSerdesType::PST_TOML);
 
     std::stringstream ss;

@@ -59,7 +59,7 @@ class JsonSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
 
-        for (auto& child : parameter->sorted_children()) {
+        for (const auto& child : parameter->sorted_children()) {
             nlohmann::ordered_json& jchild = jout[child->subkey];
             child->serialize(&jchild);
         }
@@ -70,21 +70,14 @@ class JsonSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
 
-        for (auto& cpair : parameter->children) {
-            auto& child = cpair.second;
+        for (const auto& child_pair : parameter->children()) {
+            const auto& child = child_pair.second;
 
             if (jin.find(child->subkey) == jin.end()) {
                 continue;
             }
 
-            auto& jchild = jin[child->subkey];
-            if (child->type == ParameterType::PT_OBJECT) {
-                auto object = ParameterPrototype::create_parameter(child->detail, child->subkey, child->offset);
-                child.swap(object);
-                child->parent = parameter;
-                child->deserialize(&jchild);
-                continue;
-            }
+            const auto& jchild = jin[child->subkey];
             child->deserialize(&jchild);
         }
     }
@@ -99,7 +92,7 @@ class JsonSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : publ
         auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
         jout = nlohmann::ordered_json::array();
 
-        for (auto& child : parameter->sorted_children()) {
+        for (const auto& child : parameter->sorted_children()) {
             nlohmann::ordered_json jchild;
             child->serialize(&jchild);
             jout.push_back(jchild);
@@ -114,14 +107,16 @@ class JsonSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : publ
             return;
         }
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         size_t counter = 0;
         for (const auto& jchild : jin) {
             const auto subkey = std::to_string(counter++);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&jchild);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&jchild);
+            children->emplace(subkey, child);
         }
     }
 };
@@ -134,7 +129,7 @@ class JsonSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
 
-        for (auto& child : parameter->sorted_children()) {
+        for (const auto& child : parameter->sorted_children()) {
             auto& jchild = jout[child->subkey];
             child->serialize(&jchild);
         }
@@ -145,14 +140,16 @@ class JsonSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         for (const auto& jpair : jin.items()) {
             const auto subkey = jpair.key();
             auto& jchild = jpair.value();
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&jchild);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&jchild);
+            children->emplace(subkey, child);
         }
     }
 };
@@ -166,7 +163,7 @@ class JsonSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Se
         auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
         jout = nlohmann::ordered_json::array();
 
-        for (auto& child : parameter->sorted_children()) {
+        for (const auto& child : parameter->sorted_children()) {
             nlohmann::ordered_json jchild;
             child->serialize(&jchild);
             jout.push_back(jchild);
@@ -181,14 +178,16 @@ class JsonSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Se
             return;
         }
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         size_t counter = 0;
         for (const auto& jchild : jin) {
             const auto subkey = std::to_string(counter++);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&jchild);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&jchild);
+            children->emplace(subkey, child);
         }
     }
 };

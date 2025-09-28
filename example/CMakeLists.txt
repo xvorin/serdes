@@ -14,6 +14,6 @@ add_executable(test_serdes ${SRC})
 # add_executable(test_serdes "../test.cpp")
 
 target_link_libraries(test_serdes
-    ${3RDPATH}/yaml-cpp/install/lib/libyaml-cpp.a
+    # ${3RDPATH}/yaml-cpp/install/lib/libyaml-cpp.a
     ${3RDPATH}/protobuf/install/lib/libprotobuf.a
 )

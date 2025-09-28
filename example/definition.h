@@ -6,94 +6,84 @@
 #include <string>
 
 #include <list>
+#include <map>
 #include <set>
 #include <unordered_map>
 #include <vector>
 
-struct BaseParam {
-    int v1 = 1;
-    double v2 = 5;
+struct ExampleForInteger {
+    int8_t i8;
+    int16_t i16;
+    int32_t i32;
+    int64_t i64;
+
+    uint8_t ui8;
+    uint16_t ui16;
+    uint32_t ui32;
+    uint64_t ui64;
+
+    void init_v1();
+    void init_v2();
+    void init_v3();
 };
 
-struct SubParam : public BaseParam {
-    std::string v3 = "123";
-
-    std::string show()
-    {
-        std::stringstream ss;
-        ss << "v1:" << v1 << std::endl;
-        ss << "      v2:" << v2 << std::endl;
-        ss << "      v3:" << v3;
-        return ss.str();
-    }
+enum class ExampleForEnum {
+    EFE_A,
+    EFE_B,
+    EFE_C,
+    EFE_D,
+    EFE_E,
 };
 
-enum class TestEnum {
-    TE_A,
-    TE_B,
-    TE_C,
+struct ExampleForInheritBase {
+    int i = 1;
+    double d;
+    std::string s;
+
+    void init_v1();
+    void init_v2();
+    void init_v3();
 };
 
-struct Param {
-    int x;
-    std::string y;
-    bool z;
-    double h;
+struct ExampleSubParameter : public ExampleForInheritBase {
+    std::string subs;
+    bool subb;
+    double subd;
+    float subf;
+    ExampleForEnum subefe;
+    ExampleForInteger subefi;
 
-    TestEnum e;
+    void init_v1();
+    void init_v2();
+    void init_v3();
+};
 
-    std::vector<int> o;
-    std::list<SubParam> n;
-    std::vector<std::vector<std::list<SubParam>>> m;
-    std::set<std::string> p;
-    std::unordered_map<std::string, SubParam> q;
+struct ExampleParameter {
+    int i;
+    bool b;
+    double d;
+    float f;
+    std::string s;
+    ExampleForEnum efe;
 
-    SubParam r;
+    ExampleForInteger efi;
+    ExampleSubParameter esp;
 
-    Param()
+    std::vector<int> vi;
+    std::list<ExampleSubParameter> lesp;
+    std::vector<std::vector<std::list<ExampleForInteger>>> vvlefi;
+    std::set<std::string> ss;
+    std::map<std::string, std::list<std::string>> msls;
+    std::unordered_map<std::string, ExampleForInheritBase> msefib;
+
+    void init_v1();
+    void init_v2();
+    void init_v3();
+
+    std::string show();
+
+    ExampleParameter()
     {
-        x = 1;
-        y = "123-12345678";
-        z = false;
-        e = TestEnum::TE_B;
-
-        o = { 1, 2, 3, 4, 5, 6 };
-        n.resize(2);
-
-        m.resize(2);
-        m[0].resize(1);
-        m[0][0].resize(1);
-
-        p = { "Hello", "World" };
-        q = { { "mk1", SubParam() }, { "mk2", SubParam() } };
-    }
-
-    std::string show()
-    {
-        std::stringstream ss;
-        ss << "x:" << x << std::endl;
-        ss << "y:" << y << std::endl;
-        ss << "z:" << z << std::endl;
-        ss << "e:" << static_cast<int>(e) << std::endl;
-
-        ss << "o:";
-        for (auto& i : o) {
-            ss << i << ",";
-        }
-        ss << std::endl;
-
-        ss << "p:";
-        for (auto& i : p) {
-            ss << i << ",";
-        }
-        ss << std::endl;
-
-        ss << "q:";
-        for (auto& i : q) {
-            ss << std::endl
-               << "  " << i.first << ":" << i.second.show();
-        }
-
-        return ss.str();
+        init_v1();
     }
 };

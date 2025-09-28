@@ -271,7 +271,9 @@ class ProtobufSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : pub
             detail::protobuf_add_repeated_value(parent->message(), field, parameter->value);
         } else {
             auto field = parent->descriptor()->FindFieldByName(value_name);
-            detail::protobuf_set_value(parent->message(), field, parameter->value);
+            if (field) {
+                detail::protobuf_set_value(parent->message(), field, parameter->value);
+            }
         }
     }
 
@@ -431,7 +433,7 @@ class ProtobufSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : 
         const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
         auto parent = ctx.get_current_msg();
 
-        parameter->children.clear();
+        parameter->mutable_children()->clear();
         const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
         for (size_t i = 0; i < ctx.message_field_size(parent, value_name); ++i) {
             // 创建虚拟的消息层, 拷贝父消息层(下一级非STL)
@@ -453,9 +455,10 @@ class ProtobufSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : 
             // 处理下一级
             const auto subkey = std::to_string(i);
             detail::EnterProtobufMessageGuard guard(ctx, current);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(in);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(in);
+            parameter->mutable_children()->emplace(subkey, child);
         }
     }
 };
@@ -525,7 +528,7 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
         auto key_field = descriptor->FindFieldByName("key");
         auto value_field = descriptor->FindFieldByName("value");
 
-        parameter->children.clear();
+        parameter->mutable_children()->clear();
         for (size_t i = 0; i < ctx.message_field_size(parent, value_name); ++i) {
             const auto& entry = parent->message()->GetReflection()->GetRepeatedMessage(*(parent->message()), field, i);
 
@@ -550,9 +553,10 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
 
             // 处理下一级
             detail::EnterProtobufMessageGuard guard(ctx, current);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(in);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(in);
+            parameter->mutable_children()->emplace(subkey, child);
         }
     }
 };
@@ -599,7 +603,7 @@ class ProtobufSerdes<T, typename std::enable_if<is_set<T>::value>::type> : publi
         const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
         auto parent = ctx.get_current_msg();
 
-        parameter->children.clear();
+        parameter->mutable_children()->clear();
 
         const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
         auto field = parent->descriptor()->FindFieldByName(value_name);
@@ -626,9 +630,10 @@ class ProtobufSerdes<T, typename std::enable_if<is_set<T>::value>::type> : publi
             // 处理下一级
             detail::EnterProtobufMessageGuard guard(ctx, current);
             const auto subkey = std::to_string(i);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(in);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(in);
+            parameter->mutable_children()->emplace(subkey, child);
         }
     }
 };

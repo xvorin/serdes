@@ -20,8 +20,8 @@ struct ProtobufDefineSerdesItem {
 };
 
 struct ProtobufDefineSerdesContext {
-    std::stack<std::string> msgidx;
-    std::unordered_map<std::string, std::map<int, ProtobufDefineSerdesItem>> msgs;
+    std::stack<std::string> messages;
+    std::unordered_map<std::string, std::map<int, ProtobufDefineSerdesItem>> contents;
 
     std::string to_string(const std::string& pkg = "")
     {
@@ -32,15 +32,15 @@ struct ProtobufDefineSerdesContext {
             ss << "package " << pkg << ";" << std::endl;
         }
 
-        for (auto& msg : msgs) {
-            if ("__internal_anonymous_message__" == msg.first) {
+        for (auto& c : contents) {
+            if ("__internal_anonymous_message__" == c.first) {
                 continue;
             }
 
             ss << std::endl;
-            ss << "message " << msg.first << " {" << std::endl;
+            ss << "message " << c.first << " {" << std::endl;
             size_t index = 1;
-            for (auto& item : msg.second) {
+            for (auto& item : c.second) {
                 ss << "    " << item.second.type << " " << item.second.name << " = " << index++ << ";" << std::endl;
             }
             ss << "}" << std::endl;
@@ -48,36 +48,37 @@ struct ProtobufDefineSerdesContext {
         return ss.str();
     }
 
-    bool is_msg_exist(const std::string& msgidx)
+    bool contains(const std::string& name)
     {
-        return msgs.find(msgidx) != msgs.end();
+        return contents.find(name) != contents.end();
     }
 
-    std::string get_current_msgidx()
+    const std::string& parent_message()
     {
-        return msgidx.empty() ? "" : msgidx.top();
+        static std::string empty_message;
+        return messages.empty() ? empty_message : messages.top();
     }
 
-    std::map<int, ProtobufDefineSerdesItem>* get_current_msg()
+    std::map<int, ProtobufDefineSerdesItem>* parent_message_content()
     {
-        if (msgidx.empty()) {
+        if (messages.empty()) {
             return nullptr;
         }
-        assert(is_msg_exist(msgidx.top()));
-        return &msgs[msgidx.top()];
+        assert(contains(messages.top()));
+        return &contents[messages.top()];
     }
 };
 
 struct EnterProtobufDefineMessageGuard {
-    EnterProtobufDefineMessageGuard(ProtobufDefineSerdesContext& ctx, const std::string& msgidx)
+    EnterProtobufDefineMessageGuard(ProtobufDefineSerdesContext& ctx, const std::string& message)
         : ctx_(ctx)
     {
-        ctx_.msgs[msgidx] = std::map<int, ProtobufDefineSerdesItem>();
-        ctx_.msgidx.push(msgidx);
+        ctx_.contents[message] = std::map<int, ProtobufDefineSerdesItem>();
+        ctx_.messages.push(message);
     }
     ~EnterProtobufDefineMessageGuard()
     {
-        ctx_.msgidx.pop();
+        ctx_.messages.pop();
     }
 
     ProtobufDefineSerdesContext& ctx_;
@@ -96,9 +97,9 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_basic<T>::value>::type>
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto& msg = *(ctx.get_current_msg());
-        msg[parameter->offset].type = protobuf_type<T>();
-        msg[parameter->offset].name = parameter->subkey;
+        auto& parent = *(ctx.parent_message_content());
+        parent[parameter->offset].type = protobuf_type<T>();
+        parent[parameter->offset].name = parameter->subkey;
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
@@ -114,9 +115,9 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_enum<T>::value>::type> 
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto& msg = *(ctx.get_current_msg());
-        msg[parameter->offset].type = "int32";
-        msg[parameter->offset].name = parameter->subkey;
+        auto& parent = *(ctx.parent_message_content());
+        parent[parameter->offset].type = "int32";
+        parent[parameter->offset].name = parameter->subkey;
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
@@ -134,17 +135,17 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_object<T>::value>::type
         const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
 
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto msgptr = ctx.get_current_msg();
-        auto msgidx = ctx.get_current_msgidx();
+        auto parent = ctx.parent_message_content();
+        const auto message = ctx.parent_message();
 
-        if (msgptr != nullptr && msgidx != "__internal_anonymous_message__") {
+        if (parent != nullptr && message != "__internal_anonymous_message__") {
             // object作为下级,把自己挂接上去
-            (*msgptr)[parameter->offset].type = type_name;
-            (*msgptr)[parameter->offset].name = parameter->subkey;
+            (*parent)[parameter->offset].type = type_name;
+            (*parent)[parameter->offset].name = parameter->subkey;
         }
 
         // object处理自己的下级
-        if (!ctx.is_msg_exist(type_name)) {
+        if (!ctx.contains(type_name)) {
             detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
             for (auto& child : parameter->sorted_children()) {
                 child->serialize(out);
@@ -168,16 +169,16 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_sequence<T>::value>::ty
                                                                        : detail::simplify_message_name(parameter->readable_detail_type());
 
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto& msg = *(ctx.get_current_msg());
-        msg[parameter->offset].type = "repeated " + type_name;
-        msg[parameter->offset].name = parameter->subkey;
+        auto& parent = *(ctx.parent_message_content());
+        parent[parameter->offset].type = "repeated " + type_name;
+        parent[parameter->offset].name = parameter->subkey;
 
         // SEQUENCE处理自己的下级
         std::string internal_type_name = "__internal_anonymous_message__";
         std::string internal_value_type;
         if (is_stl<typename T::value_type>::value) {
             detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-            msg[parameter->offset].type = "repeated " + internal_type_name;
+            parent[parameter->offset].type = "repeated " + internal_type_name;
         }
         auto subparam = ParameterPrototype::create_parameter(parameter->detail, internal_value_type);
         subparam->parent = std::const_pointer_cast<Parameter>(p);
@@ -203,7 +204,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
                                                                         : detail::simplify_message_name(parameter->readable_detail_type());
 
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto& msg = *(ctx.get_current_msg());
+        auto& msg = *(ctx.parent_message_content());
 
         const auto key_name = protobuf_type<typename T::key_type>();
         msg[parameter->offset].type = "map<" + (key_name == "bytes" ? "string" : key_name) + ", " + type_name + ">";
@@ -242,7 +243,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_set<T>::value>::type> :
                                                                        : detail::simplify_message_name(parameter->readable_detail_type());
 
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto& msg = *(ctx.get_current_msg());
+        auto& msg = *(ctx.parent_message_content());
         msg[parameter->offset].type = "repeated " + type_name;
         msg[parameter->offset].name = parameter->subkey;
 

@@ -10,7 +10,7 @@ struct TraitedParameter<T, typename std::enable_if<is_object<T>::value>::type> :
     using subtype = T;
 
     TraitedParameter(std::string subkey, size_t offset, std::string comment,
-        typename Composite<T>::inform_type inform, std::string verinfo)
+        typename Composite<T>::informant inform, std::string verinfo)
         : Composite<T>(std::move(subkey), typeid(subtype), offset, std::move(comment), std::move(inform), std::move(verinfo))
     {
         this->sort_children_strategy = sort_parameter_by_offset;
@@ -18,30 +18,32 @@ struct TraitedParameter<T, typename std::enable_if<is_object<T>::value>::type> :
 
     virtual std::shared_ptr<Parameter> clone(std::string newkey, size_t newoffset) const override
     {
-        auto retval = std::make_shared<TraitedParameter<T>>(std::move(newkey), newoffset, this->comment, this->inform, this->verinfo);
-        retval->parent = this->parent;
-        retval->bases = this->bases;
+        auto cloned = std::make_shared<TraitedParameter<T>>(std::move(newkey), newoffset, this->comment, this->inform, this->verinfo);
+        cloned->parent = this->parent;
+        cloned->bases = this->bases;
 
-        for (auto& child : this->children) {
-            auto retval_child = child.second->clone(child.second->subkey, child.second->offset);
-            retval_child->parent = retval;
-            retval->children[child.first] = retval_child;
+        // 添加自身的成员
+        for (const auto& child : this->children()) {
+            auto cloned_child = child.second->clone(child.second->subkey, child.second->offset);
+            cloned_child->parent = cloned;
+            cloned->mutable_children()->emplace(child.first, cloned_child);
         }
 
+        // 添加基类的成员
         for (auto& base : this->bases) {
-            for (auto& child : xvorin::serdes::ParameterPrototype::create_parameter(base, "temporary")->get_children()) {
-                auto retval_child = child.second->clone(child.second->subkey, child.second->offset);
-                retval_child->parent = retval;
-                retval->children[child.first] = retval_child;
+            for (const auto& child : xvorin::serdes::ParameterPrototype::create_parameter(base, "temporary")->children()) {
+                auto cloned_child = child.second->clone(child.second->subkey, child.second->offset);
+                cloned_child->parent = cloned;
+                cloned->mutable_children()->emplace(child.first, cloned_child);
             }
         }
 
-        return retval;
+        return cloned;
     }
 
-    using TypeBases = std::unordered_set<ParameterDetailType, ParameterDetailTypeHash, ParameterDetailTypeEqual>;
+    using BaseClasses = std::unordered_set<ParameterDetailType, ParameterDetailTypeHash, ParameterDetailTypeEqual>;
 
-    TypeBases bases;
+    BaseClasses bases;
 };
 
 }

@@ -26,6 +26,11 @@ public:
         auto bname = file;
         directory_ = dirname(const_cast<char*>(dname.c_str()));
         file_ = basename(const_cast<char*>(bname.c_str()));
+
+        // 创建退出管道
+        if (pipe(pipe_fd_) < 0) {
+            std::cerr << "pipe creation failure: " << strerror(errno) << std::endl;
+        }
     }
 
     ~FileMonite()
@@ -40,24 +45,27 @@ public:
         }
 
         switch_.store(true, std::memory_order_release);
-        // thread_ = std::make_unique<std::thread>(&FileMonite::do_monite, this);
         thread_ = std::unique_ptr<std::thread>(new std::thread(&FileMonite::do_monite, this));
         return true;
     }
 
     void stop()
     {
-        switch_.store(false, std::memory_order_release);
+        if (!switch_.exchange(false, std::memory_order_acq_rel)) {
+            return; // 已经停止
+        }
+
+        // 向管道写入数据以唤醒 select
+        if (pipe_fd_[1] != -1) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+            (void)write(pipe_fd_[1], "0", 1);
+#pragma GCC diagnostic pop
+        }
 
         if (thread_ && thread_->joinable()) {
             thread_->join();
             thread_.reset();
-        }
-
-        // 关闭文件描述符以中断select
-        if (inotify_fd_ != -1) {
-            close(inotify_fd_);
-            inotify_fd_ = -1;
         }
     }
 
@@ -88,9 +96,11 @@ private:
         while (switch_.load(std::memory_order_acquire)) {
             FD_ZERO(&fdset);
             FD_SET(inotify_fd_, &fdset);
+            FD_SET(pipe_fd_[0], &fdset);
 
-            struct timeval timeout = { 1, 0 }; // 1秒超时
-            int ret = select(inotify_fd_ + 1, &fdset, nullptr, nullptr, &timeout);
+            const int max_fd = std::max(inotify_fd_, pipe_fd_[0]);
+            struct timeval timeout = { 5, 0 }; // 5秒超时
+            int ret = select(max_fd + 1, &fdset, nullptr, nullptr, &timeout);
             if (ret < 0) {
                 if (errno == EINTR) { // 被信号中断，继续循环
                     continue;
@@ -101,6 +111,17 @@ private:
                 continue;
             }
 
+            // 检查退出管道
+            if (FD_ISSET(pipe_fd_[0], &fdset)) {
+                char dummy = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+                (void)read(pipe_fd_[0], &dummy, sizeof(dummy));
+#pragma GCC diagnostic pop
+                continue;
+            }
+
+            // 处理 inotify 事件
             if (!FD_ISSET(inotify_fd_, &fdset)) {
                 continue;
             }
@@ -123,10 +144,32 @@ private:
                 }
             }
         }
+
+        // 线程结束前的清理
+        cleanup_fds();
+    }
+
+    void cleanup_fds()
+    {
+        if (inotify_fd_ != -1) {
+            close(inotify_fd_);
+            inotify_fd_ = -1;
+        }
+
+        if (pipe_fd_[0] != -1) {
+            close(pipe_fd_[0]);
+            pipe_fd_[0] = -1;
+        }
+
+        if (pipe_fd_[1] != -1) {
+            close(pipe_fd_[1]);
+            pipe_fd_[1] = -1;
+        }
     }
 
 private:
     int inotify_fd_ = -1;
+    int pipe_fd_[2] = { -1, -1 }; // 退出管道 [读端, 写端]
     std::atomic<bool> switch_ { false };
     std::string directory_;
     std::string file_;

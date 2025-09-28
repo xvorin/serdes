@@ -127,8 +127,8 @@ class StructSerdes<T, typename std::enable_if<is_object<T>::value>::type> : publ
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
 
-        for (auto& cpair : parameter->children) {
-            auto& child = cpair.second;
+        for (const auto& child_pair : parameter->children()) {
+            const auto& child = child_pair.second;
             auto schild = static_cast<char*>(out) + child->offset;
             child->serialize(schild);
         }
@@ -138,21 +138,9 @@ class StructSerdes<T, typename std::enable_if<is_object<T>::value>::type> : publ
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
 
-        for (auto& cpair : parameter->children) {
-            auto& child = cpair.second;
+        for (auto& child_pair : (*parameter->mutable_children())) {
+            auto& child = child_pair.second;
             auto schild = static_cast<const char*>(in) + child->offset;
-
-            if (child->type == ParameterType::PT_OBJECT) {
-                auto object = ParameterPrototype::create_parameter(child->detail, child->subkey, child->offset);
-
-                const_cast<std::string&>(object->comment) = (object->comment.size() > child->comment.size()) ? object->comment : child->comment;
-                const_cast<std::string&>(object->verinfo) = (object->verinfo.size() > child->verinfo.size()) ? object->verinfo : child->verinfo;
-
-                child.swap(object);
-                child->parent = parameter;
-                child->deserialize(schild);
-                continue;
-            }
             child->deserialize(schild);
         }
     }
@@ -202,14 +190,16 @@ class StructSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : pu
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& sin = *reinterpret_cast<const T*>(in);
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         size_t counter = 0;
         for (const auto& schild : sin) {
             const auto subkey = std::to_string(counter++);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&schild);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&schild);
+            children->emplace(subkey, child);
         }
     }
 };
@@ -223,7 +213,7 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
         auto& sout = *reinterpret_cast<T*>(out);
 
         std::set<typename T::key_type> subkeys;
-        for (auto& child : parameter->children) {
+        for (const auto& child : parameter->children()) {
             auto subkey = from_string<typename T::key_type>(child.first);
             if (sout.find(subkey) == sout.end() && parameter->profile()->inform_enabled) {
                 const auto premitive = parameter->profile()->inform_enabled;
@@ -255,13 +245,15 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& sin = *reinterpret_cast<const T*>(in);
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         for (const auto& spair : sin) {
             const std::string subkey = to_string(spair.first);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&spair.second);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&spair.second);
+            children->emplace(subkey, child);
         }
     }
 };
@@ -304,14 +296,16 @@ class StructSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public 
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& sin = *reinterpret_cast<const T*>(in);
 
-        parameter->children.clear();
+        auto children = parameter->mutable_children();
+        children->clear();
 
         size_t counter = 0;
-        for (auto& schild : sin) {
+        for (const auto& schild : sin) {
             const std::string subkey = std::to_string(counter++);
-            parameter->children[subkey] = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            parameter->children[subkey]->parent = parameter;
-            parameter->children[subkey]->deserialize(&schild);
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+            child->parent = parameter;
+            child->deserialize(&schild);
+            children->emplace(subkey, child);
         }
     }
 };
