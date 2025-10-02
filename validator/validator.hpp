@@ -1,6 +1,8 @@
 #pragma once
 
 #include "serdes/types/traits.hpp"
+#include "serdes/utils/utils.hpp"
+
 #include <regex>
 
 namespace xvorin::serdes {
@@ -8,36 +10,6 @@ namespace xvorin::serdes {
 template <typename T, typename E = void> //[E]nable
 struct Validator {
 };
-
-namespace {
-
-/// 字符串分隔，insertEmpty : 如果有连续的delim，是否插入空串
-inline void split(const std::string& str, std::vector<std::string>& result, const std::string& delim = " ",
-    bool insertEmpty = false)
-{
-    if (str.empty() || delim.empty()) {
-        return;
-    }
-
-    std::string::const_iterator substart = str.begin();
-    std::string::const_iterator subend = substart;
-    while (true) {
-        subend = std::search(substart, str.end(), delim.begin(), delim.end());
-        std::string temp(substart, subend);
-
-        if (!temp.empty()) {
-            result.push_back(temp);
-        } else if (insertEmpty) {
-            result.push_back("");
-        }
-
-        if (subend == str.end())
-            break;
-        substart = subend + delim.size();
-    }
-}
-
-}
 
 // 数字
 template <typename T>
@@ -65,11 +37,11 @@ public:
     {
         // (1,3);[4,6)
         std::vector<std::string> limits;
-        split(verinfo, limits, ";");
+        utils::split(verinfo, limits, ";");
 
         for (const auto& limit : limits) {
             std::vector<std::string> limit_pair;
-            split(limit, limit_pair, ",");
+            utils::split(limit, limit_pair, ",");
             if (limit_pair.size() != 2) {
                 continue;
             }
@@ -142,7 +114,7 @@ public:
     void parse_verification_info(const std::string& verinfo)
     {
         std::vector<std::string> limits;
-        split(verinfo, limits, ",");
+        utils::split(verinfo, limits, ",");
 
         for (auto& limit : limits) {
             values_.insert(from_string<int>(limit));

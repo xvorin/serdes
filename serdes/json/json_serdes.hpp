@@ -192,4 +192,34 @@ class JsonSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Se
     }
 };
 
+// PTR
+template <typename T>
+class JsonSerdes<T, typename std::enable_if<is_smart_ptr<T>::value>::type> : public Serdes {
+public:
+private:
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
+
+        if (parameter->value) {
+            parameter->value->serialize(out);
+        } else {
+            jout = nullptr;
+        }
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
+
+        if (jin != nullptr) {
+            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0");
+            parameter->value->parent = parameter;
+            parameter->value->deserialize(&jin);
+        }
+    }
+};
+
 }

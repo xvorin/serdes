@@ -47,7 +47,7 @@ void ProtobufAPI<T>::from_pbbin(const std::string& index, const std::string& s)
     auto p = tree_.parameter(index);
 
     detail::ProtobufSerdesContext pbbin_in(pbdef);
-    pbbin_in.from_binary_string(detail::simplify_message_name(p->readable_detail_type()), s);
+    pbbin_in.from_binary_string(detail::generate_pbtype_name(p->readable_detail_type()), s);
 
     tree_.deserialize(p, &pbbin_in, ParameterSerdesType::PST_PBFMT);
     tree_.commit_model_changes();
@@ -66,7 +66,7 @@ void ProtobufAPI<T>::from_pbtxt(const std::string& index, const std::string& s)
     auto p = tree_.parameter(index);
 
     detail::ProtobufSerdesContext pbtxt_in(pbdef);
-    pbtxt_in.from_txt_string(detail::simplify_message_name(p->readable_detail_type()), s);
+    pbtxt_in.from_txt_string(detail::generate_pbtype_name(p->readable_detail_type()), s);
 
     tree_.deserialize(p, &pbtxt_in, ParameterSerdesType::PST_PBFMT);
     tree_.commit_model_changes();

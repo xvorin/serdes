@@ -310,4 +310,48 @@ class StructSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public 
     }
 };
 
+// PTR
+template <typename T>
+class StructSerdes<T, typename std::enable_if<is_smart_ptr<T>::value>::type> : public Serdes {
+public:
+private:
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& sout = *reinterpret_cast<T*>(out);
+
+        if (!parameter->value && !sout) {
+            return;
+        }
+
+        if (!parameter->value && sout) {
+            sout = nullptr;
+            return;
+        }
+
+        if (!sout) {
+            sout = parameter->make_smart_ptr();
+        }
+        parameter->value->serialize(sout.get());
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& sin = *reinterpret_cast<const T*>(in);
+
+        if (sin == nullptr) {
+            parameter->value = nullptr;
+            return;
+        }
+
+        if (parameter->value == nullptr) {
+            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0");
+            parameter->value->parent = parameter;
+        }
+
+        parameter->value->deserialize(sin.get());
+    }
+};
+
 }

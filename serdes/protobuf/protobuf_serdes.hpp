@@ -46,19 +46,17 @@ private:
 
 class ProtobufMessage {
 public:
-    ProtobufMessage(google::protobuf::Message* msg, const google::protobuf::Descriptor* desc,
-        int index = -1, std::string value_name = "")
+    ProtobufMessage() = default;
+
+    ProtobufMessage(google::protobuf::Message* msg)
         : msg_(msg)
-        , desc_(desc)
-        , repeat_index_(index)
-        , value_name_(std::move(value_name))
     {
-        assert(msg_ && desc_);
+        assert(msg_);
     }
 
     std::string type_name() const
     {
-        return desc_->name();
+        return msg_->GetDescriptor()->name();
     }
 
     google::protobuf::Message* message()
@@ -68,7 +66,7 @@ public:
 
     const google::protobuf::Descriptor* descriptor() const
     {
-        return desc_;
+        return msg_->GetDescriptor();
     }
 
     int repeat_index() const
@@ -81,23 +79,27 @@ public:
         repeat_index_ = index;
     }
 
-    std::string value_name() const
+    bool is_repeated() const
     {
-        return value_name_;
+        return repeat_index_ >= 0;
     }
 
-    void set_value_name(std::string name)
+    std::string field_name() const
     {
-        value_name_ = std::move(name);
+        return field_name_;
+    }
+
+    void set_field_name(std::string name)
+    {
+        field_name_ = std::move(name);
     }
 
 private:
     google::protobuf::Message* msg_ = nullptr; // 可以获取reflection
-    const google::protobuf::Descriptor* desc_ = nullptr; // 可以获取 field
 
     /// 以下为非必须参数, 用于支持protobuf的map类型和repeated类型(映射为STL相关数据结构)
     int repeat_index_ = -1; //-1 means not repeat, 用于标记repeated类型, 可以影响子节点的赋值行为
-    std::string value_name_; // value_name_ : type_name_在参数树特定位置处的变量名, 用于子节点进行FindFieldByName操作
+    std::string field_name_; // value_name_ : type_name_在参数树特定位置处的变量名, 用于子节点进行FindFieldByName操作
 };
 
 class ProtobufSerdesContext {
@@ -118,46 +120,48 @@ public:
         return dynamic_factory_.GetPrototype(desc)->New();
     }
 
-    ProtobufMessage mutable_message(ProtobufMessage* parent, const std::string& value_name)
+    ProtobufMessage mutable_message(ProtobufMessage* parent, const std::string& field_name)
     {
         auto parent_desc = parent->descriptor();
-        auto parent_msg = parent->message();
-        auto parent_refl = parent_msg->GetReflection();
+        auto parent_mesg = parent->message();
 
-        auto child_field = parent_desc->FindFieldByName(value_name);
+        auto child_field = parent_desc->FindFieldByName(field_name);
+        auto child_mesg = parent_mesg->GetReflection()->MutableMessage(parent_mesg, child_field);
 
-        auto child_msg = parent_refl->MutableMessage(parent_msg, child_field);
-        auto child_desc = child_field->message_type();
-
-        return ProtobufMessage(child_msg, child_desc);
+        return ProtobufMessage(child_mesg);
     }
 
-    ProtobufMessage append_message(ProtobufMessage* parent, const std::string& value_name)
+    ProtobufMessage append_message(ProtobufMessage* parent, const std::string& field_name)
     {
         auto parent_desc = parent->descriptor();
-        auto parent_msg = parent->message();
-        auto parent_refl = parent_msg->GetReflection();
+        auto parent_mesg = parent->message();
 
-        auto child_field = parent_desc->FindFieldByName(value_name);
+        auto child_field = parent_desc->FindFieldByName(field_name);
+        auto child_mesg = parent_mesg->GetReflection()->AddMessage(parent_mesg, child_field);
 
-        auto child_msg = parent_refl->AddMessage(parent_msg, child_field);
-        auto child_desc = child_field->message_type();
-
-        return ProtobufMessage(child_msg, child_desc);
+        return ProtobufMessage(child_mesg);
     }
 
-    size_t message_field_size(ProtobufMessage* parent, const std::string& value_name)
+    size_t message_field_size(ProtobufMessage* parent, const std::string& field_name)
     {
-        auto field = parent->descriptor()->FindFieldByName(value_name);
-        return parent->message()->GetReflection()->FieldSize(*(parent->message()), field);
+        auto parent_desc = parent->descriptor();
+        auto parent_mesg = parent->message();
+
+        auto child_field = parent_desc->FindFieldByName(field_name);
+
+        return parent_mesg->GetReflection()->FieldSize(*parent_mesg, child_field);
     }
 
-    ProtobufMessage mutable_repeated_message(ProtobufMessage* parent, const std::string& value_name, int index)
+    ProtobufMessage mutable_repeated_message(ProtobufMessage* parent, const std::string& field_name, int index)
     {
-        auto field = parent->descriptor()->FindFieldByName(value_name);
-        assert(field->is_repeated());
-        auto& msg = parent->message()->GetReflection()->GetRepeatedMessage(*(parent->message()), field, index);
-        return ProtobufMessage(const_cast<google::protobuf::Message*>(&msg), field->message_type());
+        auto parent_desc = parent->descriptor();
+        auto parent_mesg = parent->message();
+
+        auto child_field = parent_desc->FindFieldByName(field_name);
+        auto child_mesg = parent_mesg->GetReflection()->MutableRepeatedMessage(parent_mesg, child_field, index);
+        assert(child_field->is_repeated());
+
+        return ProtobufMessage(child_mesg);
     }
 
     std::string to_binary_string()
@@ -189,7 +193,7 @@ public:
         return root_ && google::protobuf::TextFormat::ParseFromString(pbtxt, root_);
     }
 
-    ProtobufMessage* get_current_msg()
+    ProtobufMessage* parent_message()
     {
         return (msgs.empty()) ? nullptr : &(msgs.top());
     }
@@ -261,19 +265,18 @@ class ProtobufSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : pub
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
-        auto parent = ctx.get_current_msg();
-        assert(parent);
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
 
-        if (parent->repeat_index() >= 0) { // repeated 修饰的基本类型
-            auto field = parent->descriptor()->FindFieldByName(value_name);
+        if (parent->is_repeated()) { // repeated 修饰的基本类型
             detail::protobuf_add_repeated_value(parent->message(), field, parameter->value);
         } else {
-            auto field = parent->descriptor()->FindFieldByName(value_name);
-            if (field) {
-                detail::protobuf_set_value(parent->message(), field, parameter->value);
-            }
+            detail::protobuf_set_value(parent->message(), field, parameter->value);
         }
     }
 
@@ -281,16 +284,18 @@ class ProtobufSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : pub
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
-        auto parent = ctx.get_current_msg();
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
-        auto field = parent->descriptor()->FindFieldByName(value_name);
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        if (parent->repeat_index() >= 0) { // repeated 修饰的基本类型
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
+
+        if (parent->is_repeated()) { // repeated 修饰的基本类型
             parameter->value = detail::protobuf_get_repeated_value<T>(parent->message(), field, parent->repeat_index());
         } else {
-            if (field) {
-                parameter->value = detail::protobuf_get_value<T>(parent->message(), field);
-            }
+            parameter->value = detail::protobuf_get_value<T>(parent->message(), field);
         }
     }
 };
@@ -302,14 +307,17 @@ class ProtobufSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : publ
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
-        auto parent = ctx.get_current_msg();
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        if (parent->repeat_index() >= 0) { // repeated 修饰的enum类型
-            assert(!parent->value_name().empty()); // 一定会在上一级虚拟一个带value_name的消息层
-            auto field = parent->descriptor()->FindFieldByName(parent->value_name());
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
+
+        if (parent->is_repeated()) { // repeated 修饰的enum类型
             detail::protobuf_add_repeated_value(parent->message(), field, static_cast<int>(parameter->value));
         } else {
-            auto field = parent->descriptor()->FindFieldByName(parameter->subkey);
             detail::protobuf_set_value(parent->message(), field, static_cast<int>(parameter->value));
         }
     }
@@ -318,16 +326,18 @@ class ProtobufSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : publ
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
-        auto parent = ctx.get_current_msg();
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
-        auto field = parent->descriptor()->FindFieldByName(value_name);
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        if (parent->repeat_index() >= 0) { // repeated 修饰的基本类型
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
+
+        if (parent->is_repeated()) { // repeated 修饰的基本类型
             parameter->value = static_cast<T>(detail::protobuf_get_repeated_value<int>(parent->message(), field, parent->repeat_index()));
         } else {
-            if (field) {
-                parameter->value = static_cast<T>(detail::protobuf_get_value<int>(parent->message(), field));
-            }
+            parameter->value = static_cast<T>(detail::protobuf_get_value<int>(parent->message(), field));
         }
     }
 };
@@ -339,13 +349,11 @@ class ProtobufSerdes<T, typename std::enable_if<is_object<T>::value>::type> : pu
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
-
-        const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
-        auto parent = ctx.get_current_msg();
+        auto parent = ctx.parent_message();
 
         if (!parent) { // 没有上一级 说明是根
-            ctx.set_root(ctx.create_message(type_name));
-            auto current = detail::ProtobufMessage(ctx.root(), ctx.get_descriptor(type_name));
+            ctx.set_root(ctx.create_message(detail::Pbtraits<T>::type()));
+            auto current = detail::ProtobufMessage(ctx.root());
             // 处理下一级
             detail::EnterProtobufMessageGuard guard(ctx, current);
             for (auto& child : parameter->sorted_children()) {
@@ -355,9 +363,9 @@ class ProtobufSerdes<T, typename std::enable_if<is_object<T>::value>::type> : pu
         }
 
         // 有上级, 需要基于上级创建本级消息 append_message:适用于repeated 消息; mutable_message:适用于普通消息
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
-        auto current = (parent->repeat_index() >= 0) ? ctx.append_message(parent, value_name)
-                                                     : ctx.mutable_message(parent, value_name);
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+        auto current = (parent->is_repeated()) ? ctx.append_message(parent, field_name)
+                                               : ctx.mutable_message(parent, field_name);
         detail::EnterProtobufMessageGuard guard(ctx, current);
         for (auto& child : parameter->sorted_children()) {
             child->serialize(out);
@@ -368,11 +376,10 @@ class ProtobufSerdes<T, typename std::enable_if<is_object<T>::value>::type> : pu
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
-        auto parent = ctx.get_current_msg();
-        const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
+        auto parent = ctx.parent_message();
 
         if (!parent) { // 没有上一级 说明是根
-            auto current = detail::ProtobufMessage(ctx.root(), ctx.get_descriptor(type_name));
+            auto current = detail::ProtobufMessage(ctx.root());
             detail::EnterProtobufMessageGuard guard(ctx, current);
             for (auto& child : parameter->sorted_children()) {
                 child->deserialize(in);
@@ -380,9 +387,9 @@ class ProtobufSerdes<T, typename std::enable_if<is_object<T>::value>::type> : pu
             return;
         }
 
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
-        auto current = (parent->repeat_index() >= 0) ? ctx.mutable_repeated_message(parent, value_name, parent->repeat_index())
-                                                     : ctx.mutable_message(parent, value_name);
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+        auto current = (parent->is_repeated()) ? ctx.mutable_repeated_message(parent, field_name, parent->repeat_index())
+                                               : ctx.mutable_message(parent, field_name);
 
         detail::EnterProtobufMessageGuard guard(ctx, current);
         for (auto& child : parameter->sorted_children()) {
@@ -393,27 +400,28 @@ class ProtobufSerdes<T, typename std::enable_if<is_object<T>::value>::type> : pu
 
 // SEQUENCE
 template <typename T>
-class ProtobufSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : public Serdes {
+class ProtobufSerdes<T, typename std::enable_if<is_sequence<T>::value || is_set<T>::value>::type> : public Serdes {
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
-        auto parent = ctx.get_current_msg();
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
         int repeat_index = 0;
         for (auto& child : parameter->sorted_children()) {
+            detail::ProtobufMessage current;
+
             // 创建虚拟的消息层, 拷贝父消息层(下一级非STL)
-            auto current = *parent;
-            current.set_value_name(value_name); // 传递value_name,用于下一级寻找field
+            if (!is_stl<typename T::value_type>::value) {
+                current = *parent;
+                current.set_field_name(field_name); // 传递value_name,用于下一级寻找field
+            }
 
             // 创建虚拟的消息层, 构建新的消息层(下一级是STL)
             if (is_stl<typename T::value_type>::value) {
-                std::string internal_type_name;
-                std::string internal_value_type;
-                detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-                current = ctx.append_message(parent, value_name);
-                current.set_value_name(internal_value_type); // 传递value_name,用于下一级寻找field
+                current = ctx.append_message(parent, field_name);
+                current.set_field_name(detail::Pbtraits<typename T::value_type>::value()); // 传递field_name,用于下一级寻找field
             }
 
             // 添加repeat标志
@@ -429,24 +437,24 @@ class ProtobufSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : 
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
-
-        const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
-        auto parent = ctx.get_current_msg();
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
         parameter->mutable_children()->clear();
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
-        for (size_t i = 0; i < ctx.message_field_size(parent, value_name); ++i) {
+
+        for (size_t i = 0; i < ctx.message_field_size(parent, field_name); i++) {
+            detail::ProtobufMessage current;
+
             // 创建虚拟的消息层, 拷贝父消息层(下一级非STL)
-            auto current = *parent;
-            current.set_value_name(value_name); // 传递value_name,用于下一级寻找field
+            if (!is_stl<typename T::value_type>::value) {
+                current = *parent;
+                current.set_field_name(field_name); // 传递value_name,用于下一级寻找field
+            }
 
             // 创建虚拟的消息层, 构建新的消息层(下一级是STL)
             if (is_stl<typename T::value_type>::value) {
-                std::string internal_type_name;
-                std::string internal_value_type;
-                detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-                current = ctx.mutable_repeated_message(parent, value_name, i);
-                current.set_value_name(internal_value_type); // 传递value_name,用于下一级寻找field
+                current = ctx.mutable_repeated_message(parent, field_name, i);
+                current.set_field_name(detail::Pbtraits<typename T::value_type>::value()); // 传递field_name,用于下一级寻找field
             }
 
             // 添加repeat标志
@@ -470,10 +478,10 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
-        auto parent = ctx.get_current_msg();
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        auto field = parent->descriptor()->FindFieldByName(value_name);
+        auto field = parent->descriptor()->FindFieldByName(field_name);
         assert(field && field->is_map());
 
         auto descriptor = field->message_type();
@@ -492,19 +500,19 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
 
             // set value
             {
-                std::string internal_type_name;
-                std::string internal_value_type;
-                detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
+                detail::ProtobufMessage current;
 
                 // 创建虚拟的消息层(下一级非STL)
-                auto current = detail::ProtobufMessage(entry, descriptor);
-                current.set_value_name("value");
+                if (!is_stl<typename T::mapped_type>::value) {
+                    current = detail::ProtobufMessage(entry);
+                    current.set_field_name("value");
+                }
 
                 // 创建真实的消息层(下一级是STL 需要当前层级插入一个真实的消息层)
                 if (is_stl<typename T::mapped_type>::value) {
-                    auto child_proto_msg = entry->GetReflection()->MutableMessage(entry, value_field);
-                    current = detail::ProtobufMessage(child_proto_msg, ctx.get_descriptor(internal_type_name));
-                    current.set_value_name(internal_value_type); // 传递value_name,用于下一级寻找field
+                    auto child_mesg = entry->GetReflection()->MutableMessage(entry, value_field);
+                    current = detail::ProtobufMessage(child_mesg);
+                    current.set_field_name(detail::Pbtraits<typename T::mapped_type>::value()); // 传递field_name,用于下一级寻找field
                 }
 
                 // 处理下一级
@@ -518,10 +526,10 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
-        auto parent = ctx.get_current_msg();
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        auto field = parent->descriptor()->FindFieldByName(value_name);
+        auto field = parent->descriptor()->FindFieldByName(field_name);
         assert(field && field->is_map());
 
         auto descriptor = field->message_type();
@@ -529,112 +537,130 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
         auto value_field = descriptor->FindFieldByName("value");
 
         parameter->mutable_children()->clear();
-        for (size_t i = 0; i < ctx.message_field_size(parent, value_name); ++i) {
+        for (size_t i = 0; i < ctx.message_field_size(parent, field_name); i++) {
             const auto& entry = parent->message()->GetReflection()->GetRepeatedMessage(*(parent->message()), field, i);
 
             // get key
             const auto subkey = to_string<typename T::key_type>(detail::protobuf_get_value<typename T::key_type>(&entry, key_field));
 
             // get value
-            std::string internal_type_name;
-            std::string internal_value_type;
-            detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
+            {
+                detail::ProtobufMessage current;
 
-            // 创建虚拟的消息层(下一级非STL)
-            auto current = detail::ProtobufMessage(const_cast<google::protobuf::Message*>(&entry), descriptor);
-            current.set_value_name("value");
+                // 创建虚拟的消息层(下一级非STL)
+                if (!is_stl<typename T::mapped_type>::value) {
+                    current = detail::ProtobufMessage(const_cast<google::protobuf::Message*>(&entry));
+                    current.set_field_name("value");
+                }
 
-            // 创建真实的消息层(下一级是STL 需要当前层级插入一个真实的消息层)
-            if (is_stl<typename T::mapped_type>::value) {
-                const auto& child_proto_msg = entry.GetReflection()->GetMessage(entry, value_field);
-                current = detail::ProtobufMessage(const_cast<google::protobuf::Message*>(&child_proto_msg), ctx.get_descriptor(internal_type_name));
-                current.set_value_name(internal_value_type); // 传递value_name,用于下一级寻找field
+                // 创建真实的消息层(下一级是STL 需要当前层级插入一个真实的消息层)
+                if (is_stl<typename T::mapped_type>::value) {
+                    auto& child_mesg = entry.GetReflection()->GetMessage(entry, value_field);
+                    current = detail::ProtobufMessage(const_cast<google::protobuf::Message*>(&child_mesg));
+                    current.set_field_name(detail::Pbtraits<typename T::mapped_type>::value()); // 传递field_name,用于下一级寻找field
+                }
+
+                // 处理下一级
+                detail::EnterProtobufMessageGuard guard(ctx, current);
+                auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
+                child->parent = parameter;
+                child->deserialize(in);
+                parameter->mutable_children()->emplace(subkey, child);
             }
-
-            // 处理下一级
-            detail::EnterProtobufMessageGuard guard(ctx, current);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
-            child->deserialize(in);
-            parameter->mutable_children()->emplace(subkey, child);
         }
     }
 };
 
-// SET
+// PTR
 template <typename T>
-class ProtobufSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Serdes {
+class ProtobufSerdes<T, typename std::enable_if<is_smart_ptr<T>::value>::type> : public Serdes {
+public:
+private:
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
-        auto parent = ctx.get_current_msg();
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        int repeat_index = 0;
-        for (auto& child : parameter->sorted_children()) {
-            // 创建虚拟的消息层, 拷贝父消息层(下一级非STL)
-            auto current = *parent;
-            current.set_value_name(value_name); // 传递value_name,用于下一级寻找field
-
-            // 创建虚拟的消息层, 构建新的消息层(下一级是STL)
-            if (is_stl<typename T::value_type>::value) {
-                std::string internal_type_name;
-                std::string internal_value_type;
-                detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-                current = ctx.append_message(parent, value_name);
-                current.set_value_name(internal_value_type); // 传递value_name,用于下一级寻找field
-            }
-
-            // 添加repeat标志
-            current.set_repeat_index(repeat_index++);
-
-            // 处理下一级
-            detail::EnterProtobufMessageGuard guard(ctx, current);
-            child->serialize(out);
+        if (!parameter->value) {
+            return;
         }
+
+        detail::ProtobufMessage current;
+
+        // if (is_smart_ptr<typename T::element_type>::value) {
+        if (!is_stl<typename T::element_type>::value) {
+            current = *parent;
+            current.set_field_name(field_name);
+        }
+
+        if (is_stl<typename T::element_type>::value) {
+            current = ctx.mutable_message(parent, field_name);
+            current.set_field_name(detail::Pbtraits<typename T::element_type>::value()); // 传递field_name,用于下一级寻找field
+        }
+
+        // 处理下一级
+        current.set_repeat_index(-1);
+        detail::EnterProtobufMessageGuard guard(ctx, current);
+        parameter->value->serialize(out);
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
-        const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
-        auto parent = ctx.get_current_msg();
-
-        parameter->mutable_children()->clear();
-
-        const auto value_name = parent->value_name().empty() ? parameter->subkey : parent->value_name();
-        auto field = parent->descriptor()->FindFieldByName(value_name);
-        assert(field->is_repeated());
-
-        const size_t size = parent->message()->GetReflection()->FieldSize(*(parent->message()), field);
-        for (size_t i = 0; i < size; ++i) {
-            // 创建虚拟的消息层, 拷贝父消息层(下一级非STL)
-            auto current = *parent;
-            current.set_value_name(value_name); // 传递value_name,用于下一级寻找field
-
-            // 创建虚拟的消息层, 构建新的消息层(下一级是STL)
-            if (is_stl<typename T::value_type>::value) {
-                std::string internal_type_name;
-                std::string internal_value_type;
-                detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-                current = ctx.mutable_repeated_message(parent, value_name, i);
-                current.set_value_name(internal_value_type); // 传递value_name,用于下一级寻找field
-            }
-
-            // 添加repeat标志
-            current.set_repeat_index(i);
-
-            // 处理下一级
-            detail::EnterProtobufMessageGuard guard(ctx, current);
-            const auto subkey = std::to_string(i);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
-            child->deserialize(in);
-            parameter->mutable_children()->emplace(subkey, child);
+        if (!has_field(parent->message(), field_name)) {
+            parameter->value = nullptr;
+            return;
         }
+
+        if (!parameter->value) {
+            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0");
+            parameter->value->parent = parameter;
+        }
+
+        detail::ProtobufMessage current;
+
+        // 创建虚拟的消息层, 拷贝父消息层(下一级非STL)
+        if (!is_stl<typename T::element_type>::value) {
+            current = *parent;
+            current.set_field_name(field_name); // 传递value_name,用于下一级寻找field
+        }
+
+        // 创建虚拟的消息层, 构建新的消息层(下一级是STL)
+        if (is_stl<typename T::element_type>::value) {
+            current = ctx.mutable_message(parent, field_name);
+            current.set_field_name(detail::Pbtraits<typename T::element_type>::value()); // 传递field_name,用于下一级寻找field
+        }
+
+        // 处理下一级
+        current.set_repeat_index(-1);
+        detail::EnterProtobufMessageGuard guard(ctx, current);
+        parameter->value->deserialize(in);
+    }
+
+    bool has_field(google::protobuf::Message* message, const std::string& field_name)
+    {
+        const google::protobuf::Descriptor* descriptor = message->GetDescriptor();
+        const google::protobuf::FieldDescriptor* field = descriptor->FindFieldByName(field_name);
+
+        if (!field) {
+            return false;
+        }
+
+        const google::protobuf::Reflection* reflection = message->GetReflection();
+
+        // 对于重复字段，检查是否有元素
+        if (field->is_repeated()) {
+            return reflection->FieldSize(*message, field) > 0;
+        }
+
+        // 对于普通字段，使用 HasField
+        return reflection->HasField(*message, field);
     }
 };
 

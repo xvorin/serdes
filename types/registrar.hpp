@@ -10,6 +10,8 @@
 #include "serdes/types/sequence.hpp"
 #include "serdes/types/set.hpp"
 
+#include "serdes/types/pointer.hpp"
+
 #include "serdes/types/basic_impl.hpp"
 #include "serdes/types/composite_impl.hpp"
 #include "serdes/types/enum_impl.hpp"
@@ -23,12 +25,11 @@ public:
     };
 
     template <typename P, typename M> //[P]arent & [M]ember
-    struct RegisterParameter<P, M, typename std::enable_if<is_composite<M>::value>::type> {
+    struct RegisterParameter<P, M, typename std::enable_if<is_composite<M>::value || is_smart_ptr<M>::value>::type> {
         RegisterParameter(std::string subkey, size_t offset, std::string comment = "",
             typename TraitedParameter<M>::informant cb = nullptr, std::string verinfo = "")
         {
-            constexpr bool enable = std::is_pointer<M>::value || std::is_reference<M>::value || std::is_const<M>::value;
-            static_assert(!enable, "Do not support pointer, reference or const type");
+            static_assert(is_support<P>::value && is_support<M>::value, "Do not support raw pointer, reference, const & volatile type");
 
             // 保存 父结构体类型 到类型模板容器中
             auto parent = SavePrototypeHelper<P>::save();
@@ -49,12 +50,11 @@ public:
     };
 
     template <typename P, typename M> //[P]arent & [M]ember
-    struct RegisterParameter<P, M, typename std::enable_if<!is_composite<M>::value>::type> {
+    struct RegisterParameter<P, M, typename std::enable_if<!is_composite<M>::value && !is_smart_ptr<M>::value>::type> {
         RegisterParameter(std::string subkey, size_t offset, std::string comment = "",
             typename TraitedParameter<M>::informant cb = nullptr, std::string verinfo = "")
         {
-            constexpr bool enable = std::is_pointer<M>::value || std::is_reference<M>::value || std::is_const<M>::value;
-            static_assert(!enable, "Do not support pointer, reference or const type");
+            static_assert(is_support<P>::value && is_support<M>::value, "Do not support raw pointer, reference, const & volatile type");
 
             // 保存 父结构体类型 到类型模板容器中
             auto parent = SavePrototypeHelper<P>::save();
@@ -81,6 +81,8 @@ public:
     struct HiddenParameter {
         explicit HiddenParameter(const std::string& subkey)
         {
+            static_assert(is_support<P>::value, "Do not support raw pointer, reference, const & volatile type");
+
             // 保存 父结构体类型 到类型模板容器中
             auto parent = SavePrototypeHelper<P>::save();
             // 删除 成员
@@ -96,8 +98,7 @@ public:
         RegisterRoot(size_t offset, const std::string& comment = "",
             typename TraitedParameter<R>::informant cb = nullptr, const std::string& verinfo = "")
         {
-            constexpr bool enable = std::is_pointer<R>::value || std::is_reference<R>::value || std::is_const<R>::value;
-            static_assert(!enable, "Do not support pointer, reference or const type");
+            static_assert(is_support<R>::value, "Do not support raw pointer, reference, const & volatile type");
 
             // 保存 结构体类型 到类型模板容器中
             auto root = SavePrototypeHelper<R>::save();
@@ -120,9 +121,7 @@ public:
     struct RegisterInheritRelation {
         RegisterInheritRelation()
         {
-            constexpr bool base_enable = std::is_pointer<B>::value || std::is_reference<B>::value || std::is_const<B>::value;
-            constexpr bool drive_enable = std::is_pointer<D>::value || std::is_reference<D>::value || std::is_const<D>::value;
-            static_assert(!base_enable && !drive_enable, "Do not support pointer, reference or const type!");
+            static_assert(is_support<B>::value && is_support<D>::value, "Do not support pointer, reference or const type!");
             static_assert(is_object<B>::value && is_object<D>::value, "Must be struct or class!");
             static_assert(std::is_base_of<B, D>::value, "Has no inheritance relationship!");
 

@@ -53,6 +53,7 @@ public:
 private:
     virtual std::string serialize() = 0;
     virtual void deserialize(const std::string&) = 0;
+    bool has_cmd(std::vector<std::pair<std::string, std::string>> cmds, const std::string& target, std::string* param = nullptr);
 
 private:
     ParameterTree<T>& tree_;
@@ -85,7 +86,7 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
     };
     // clang-format on
 
-    std::unordered_map<std::string, std::string> cmds;
+    std::vector<std::pair<std::string, std::string>> cmds;
     std::vector<std::string> args;
     for (int i = 0; i < argc; i++) {
         std::istringstream iss(std::string(argv[i]));
@@ -104,7 +105,7 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
 
         const std::string cmd = args[i].substr(2);
         if (actions.find(cmd) != actions.end()) {
-            cmds[cmd] = (i + 1 < args.size() && 0 != args[i + 1].find("--")) ? args[++i] : "";
+            cmds.push_back({ cmd, (i + 1 < args.size() && 0 != args[i + 1].find("--")) ? args[++i] : "" });
             continue;
         }
 
@@ -112,18 +113,17 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
             break;
         }
 
-        cmds[cmd] = args[++i];
+        cmds.push_back({ cmd, args[++i] });
     }
 
-    if (cmds.find("help") != cmds.end()) {
+    if (has_cmd(cmds, "help")) {
         actions["help"](""); // exit
     }
 
     // create or remove
-    for (const auto& s : actions) {
-        auto iter = cmds.find(s.first);
-        if (iter != cmds.end() && s.second && (s.first == "create" || s.first == "remove")) {
-            s.second(iter->second);
+    for (const auto& cmd : cmds) {
+        if (cmd.first == "create" || cmd.first == "remove") {
+            actions[cmd.first](cmd.second);
         }
     }
 
@@ -136,12 +136,13 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
 
     tree_.commit_model_changes();
 
-    if (cmds.find("show") != cmds.end()) {
-        actions["show"](cmds["show"]); // exit
+    std::string show_index;
+    if (has_cmd(cmds, "show", &show_index)) {
+        actions["show"](show_index); // exit
     }
 
     // save
-    if (cmds.find("save") != cmds.end()) {
+    if (has_cmd(cmds, "save")) {
         save();
     }
 }
@@ -239,6 +240,20 @@ void CommandLineAPI<T>::reload()
     } catch (std::exception& e) {
         std::cerr << "sink file " << sink_ << " changed, load failure!" << e.what() << std::endl;
     }
+}
+
+template <typename T>
+bool CommandLineAPI<T>::has_cmd(std::vector<std::pair<std::string, std::string>> cmds, const std::string& target, std::string* param)
+{
+    for (const auto& cmd : cmds) {
+        if (cmd.first == target) {
+            if (param) {
+                *param = cmd.second;
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 template <typename T, typename... APIS>

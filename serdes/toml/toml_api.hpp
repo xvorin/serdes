@@ -33,7 +33,9 @@ void TomlAPI<T>::from_toml(const std::string& index, const std::string& s)
 {
     toml::ordered_value tin;
     try {
-        tin = toml::parse_str(s);
+        toml::spec spec = toml::spec::v(1, 0, 0);
+        spec.ext_null_value = true; // this allows `key = null` value
+        tin = toml::parse_str(s, spec);
     } catch (std::exception& e) {
         throw ParseTomlException(e.what());
     }
@@ -58,7 +60,9 @@ std::string TomlAPI<T>::to_toml(const std::string& index)
 
     std::stringstream ss;
     try {
-        ss << toml::format(tout);
+        toml::spec spec = toml::spec::v(1, 0, 0);
+        spec.ext_null_value = true; // this allows `key = null` value
+        ss << toml::format(tout, spec);
     } catch (std::exception& e) {
         throw DumpTomlException(e.what());
     }

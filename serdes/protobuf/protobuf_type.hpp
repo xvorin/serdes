@@ -1,5 +1,7 @@
 #pragma once
 
+#include "serdes/utils/utils.hpp"
+
 #include <google/protobuf/compiler/importer.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/dynamic_message.h>
@@ -9,63 +11,126 @@
 #include <inttypes.h>
 #include <string>
 
-namespace xvorin::serdes {
+namespace xvorin::serdes::detail {
+
+template <typename T, typename E = void>
+struct Pbtraits {
+};
 
 template <typename T>
-inline std::string protobuf_type()
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, double>::value>::type> {
+    static std::string type() { return "double"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, float>::value>::type> {
+    static std::string type() { return "float"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, int32_t>::value>::type> {
+    static std::string type() { return "int32"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, int64_t>::value>::type> {
+    static std::string type() { return "int64"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, uint32_t>::value>::type> {
+    static std::string type() { return "uint32"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, uint64_t>::value>::type> {
+    static std::string type() { return "uint64"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, std::string>::value>::type> {
+    static std::string type() { return "bytes"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, bool>::value>::type> {
+    static std::string type() { return "bool"; }
+    static std::string value() { return std::string(); }
+};
+
+// clang-format off
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_integral<T>::value 
+        && !std::is_same<T, int32_t>::value 
+        && !std::is_same<T, int64_t>::value 
+        && !std::is_same<T, uint32_t>::value 
+        && !std::is_same<T, uint64_t>::value 
+        && !std::is_same<T, bool>::value>::type> {
+    static std::string type() { return "int32"; }
+     static std::string value() { return std::string(); }
+};
+// clang-format on
+
+static inline std::string generate_pbtype_name(const std::string& name)
 {
-    return "int32";
+    std::vector<std::string> pieces;
+    xvorin::serdes::utils::split(name, pieces, "std::");
+
+    std::string type;
+    for (auto& r : pieces) {
+        for (auto c : r) {
+            if (c == '<' || c == '>' || c == ':') {
+                c = '_';
+            }
+            if (c == ',') {
+                c = '_';
+            }
+
+            auto not_insert = (c == '_' && !type.empty() && type.back() == '_');
+            if (!not_insert) {
+                type.push_back(c);
+            }
+        }
+    }
+
+    while (!type.empty() && type.back() == '_') {
+        type.pop_back();
+    }
+
+    type = xvorin::serdes::utils::replace(type, "shared_ptr", "sptr");
+    type = xvorin::serdes::utils::replace(type, "unique_ptr", "uptr");
+
+    return type;
 }
 
-template <>
-inline std::string protobuf_type<double>()
-{
-    return "double";
-}
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<is_object<T>::value>::type> {
+    static std::string type()
+    {
+        return generate_pbtype_name(Parameter::readable_detail_type(typeid(T)));
+    }
+    static std::string value() { return std::string(); }
+};
 
-template <>
-inline std::string protobuf_type<float>()
-{
-    return "float";
-}
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<is_stl<T>::value>::type> {
+    static std::string type()
+    {
+        return "T_" + generate_pbtype_name(Parameter::readable_detail_type(typeid(T)));
+    }
 
-template <>
-inline std::string protobuf_type<int32_t>()
-{
-    return "int32";
-}
-
-template <>
-inline std::string protobuf_type<int64_t>()
-{
-    return "int64";
-}
-
-template <>
-inline std::string protobuf_type<uint32_t>()
-{
-    return "uint32";
-}
-
-template <>
-inline std::string protobuf_type<uint64_t>()
-{
-    return "uint64";
-}
-
-template <>
-inline std::string protobuf_type<std::string>()
-{
-    return "bytes";
-}
-
-template <>
-inline std::string protobuf_type<bool>()
-{
-    return "bool";
-}
-
-namespace detail {
+    static std::string value()
+    {
+        return "v_" + generate_pbtype_name(Parameter::readable_detail_type(typeid(T)));
+    }
+};
 
 template <typename T>
 inline void protobuf_set_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, T value)
@@ -336,65 +401,4 @@ inline void protobuf_add_repeated_value(google::protobuf::Message* msg, const go
     msg->GetReflection()->AddBool(msg, field, value);
 }
 
-inline void split(const std::string& str, std::vector<std::string>& result, const std::string& delim = " ")
-{
-    if (str.empty() || delim.empty()) {
-        return;
-    }
-
-    std::string::const_iterator substart = str.begin();
-    std::string::const_iterator subend = substart;
-    while (true) {
-        subend = std::search(substart, str.end(), delim.begin(), delim.end());
-        std::string temp(substart, subend);
-
-        if (!temp.empty()) {
-            result.push_back(temp);
-        }
-
-        if (subend == str.end()) {
-            break;
-        }
-        substart = subend + delim.size();
-    }
-}
-
-inline std::string simplify_message_name(const std::string& name)
-{
-    std::vector<std::string> result;
-    split(name, result, "::");
-    return result.empty() ? "" : result.back();
-}
-
-inline void make_internal_name(const std::string& name, std::string& type, std::string& value)
-{
-    std::vector<std::string> result;
-    split(name, result, "std::");
-
-    std::string keyword;
-    for (auto& r : result) {
-        for (auto c : r) {
-            if (c == '<' || c == '>' || c == ':') {
-                c = '_';
-            }
-            if (c == ',') {
-                c = '_';
-            }
-
-            auto not_insert = (c == '_' && !keyword.empty() && keyword.back() == '_');
-            if (!not_insert) {
-                keyword.push_back(c);
-            }
-        }
-    }
-
-    while (!keyword.empty() && keyword.back() == '_') {
-        keyword.pop_back();
-    }
-
-    type = "T_" + keyword;
-    value = "v_" + keyword;
-}
-
-}
 }

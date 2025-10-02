@@ -3,7 +3,7 @@
 
 void for_json(int argc, char** argv)
 {
-    auto ep1 = xvorin::serdes::instance<ExampleParameter>("root");
+    auto ep1 = xvorin::serdes::create<ExampleParameter>();
     ep1->set_sink_file("extest1.json", xvorin::serdes::ParameterSerdesType::PST_JSON);
     ep1->parse_command_line(argc, argv);
     {
@@ -21,7 +21,7 @@ void for_json(int argc, char** argv)
 
 void for_yaml(int argc, char** argv)
 {
-    auto ep1 = xvorin::serdes::instance<ExampleParameter>("root");
+    auto ep1 = xvorin::serdes::create<ExampleParameter>();
     ep1->set_sink_file("extest1.yaml", xvorin::serdes::ParameterSerdesType::PST_YAML);
     ep1->parse_command_line(argc, argv);
     {
@@ -39,7 +39,7 @@ void for_yaml(int argc, char** argv)
 
 void for_toml(int argc, char** argv)
 {
-    auto ep1 = xvorin::serdes::instance<ExampleParameter>("root");
+    auto ep1 = xvorin::serdes::create<ExampleParameter>();
     ep1->set_sink_file("extest1.toml", xvorin::serdes::ParameterSerdesType::PST_TOML);
     ep1->parse_command_line(argc, argv);
     {
@@ -55,9 +55,10 @@ void for_toml(int argc, char** argv)
     ep2->save();
 }
 
+#if ENABLE_PROTOBUF
 void for_pbtxt(int argc, char** argv)
 {
-    auto ep1 = xvorin::serdes::instance<ExampleParameter>("root");
+    auto ep1 = xvorin::serdes::create<ExampleParameter>();
 
     std::cout << ep1->to_pbdef("root") << std::endl;
 
@@ -75,13 +76,16 @@ void for_pbtxt(int argc, char** argv)
     ep2->from_pbtxt(ep1->to_pbtxt());
     ep2->save();
 }
+#endif
 
 int main(int argc, char** argv)
 {
     for_json(argc, argv);
     for_yaml(argc, argv);
     for_toml(argc, argv);
+#if ENABLE_PROTOBUF
     for_pbtxt(argc, argv);
+#endif
 
     return 0;
 }

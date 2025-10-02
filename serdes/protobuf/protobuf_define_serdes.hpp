@@ -98,7 +98,8 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_basic<T>::value>::type>
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto& parent = *(ctx.parent_message_content());
-        parent[parameter->offset].type = protobuf_type<T>();
+
+        parent[parameter->offset].type = detail::Pbtraits<T>::type();
         parent[parameter->offset].name = parameter->subkey;
     }
 
@@ -116,6 +117,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_enum<T>::value>::type> 
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto& parent = *(ctx.parent_message_content());
+
         parent[parameter->offset].type = "int32";
         parent[parameter->offset].name = parameter->subkey;
     }
@@ -132,7 +134,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_object<T>::value>::type
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        const auto type_name = detail::simplify_message_name(parameter->readable_detail_type());
+        const auto type_name = detail::Pbtraits<T>::type();
 
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto parent = ctx.parent_message_content();
@@ -161,30 +163,32 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_object<T>::value>::type
 
 // SEQUENCE
 template <typename T>
-class ProtobufDefineSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : public Serdes {
+class ProtobufDefineSerdes<T, typename std::enable_if<is_sequence<T>::value || is_set<T>::value>::type> : public Serdes {
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        const auto type_name = is_basic<typename T::value_type>::value ? protobuf_type<typename T::value_type>()
-                                                                       : detail::simplify_message_name(parameter->readable_detail_type());
-
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto& parent = *(ctx.parent_message_content());
-        parent[parameter->offset].type = "repeated " + type_name;
+
+        const std::string child_type_name = detail::Pbtraits<typename T::value_type>::type();
+        const std::string child_value_name = detail::Pbtraits<typename T::value_type>::value();
+
+        parent[parameter->offset].type = "repeated " + child_type_name;
         parent[parameter->offset].name = parameter->subkey;
 
-        // SEQUENCE处理自己的下级
-        std::string internal_type_name = "__internal_anonymous_message__";
-        std::string internal_value_type;
-        if (is_stl<typename T::value_type>::value) {
-            detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-            parent[parameter->offset].type = "repeated " + internal_type_name;
+        if (is_basic<typename T::value_type>::value) { // 子类型为基本类型
+            return;
         }
-        auto subparam = ParameterPrototype::create_parameter(parameter->detail, internal_value_type);
-        subparam->parent = std::const_pointer_cast<Parameter>(p);
+
+        // 以下都是复杂类型, 需要插入中间消息, 保证它们的子节点: 1.不再继续存在于当前message内, 2.但同时需要另行建立一个message
+        //    对于子类型为 结构体的 另行建立的message为结构体名称,字段不需要在下层中做向上挂接的动作，但是需要通过触发下层记录结构体自身的完整消息内容
+        //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
+        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
+        child->parent = std::const_pointer_cast<Parameter>(p);
         {
-            detail::EnterProtobufDefineMessageGuard guard(ctx, internal_type_name);
-            subparam->serialize(out);
+            const auto type_name = is_object<typename T::value_type>::value ? "__internal_anonymous_message__" : child_type_name;
+            detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
+            child->serialize(out);
         }
     }
 
@@ -200,30 +204,29 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        const auto type_name = is_basic<typename T::mapped_type>::value ? protobuf_type<typename T::mapped_type>()
-                                                                        : detail::simplify_message_name(parameter->readable_detail_type());
-
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto& msg = *(ctx.parent_message_content());
+        auto& parent = *(ctx.parent_message_content());
 
-        const auto key_name = protobuf_type<typename T::key_type>();
-        msg[parameter->offset].type = "map<" + (key_name == "bytes" ? "string" : key_name) + ", " + type_name + ">";
-        msg[parameter->offset].name = parameter->subkey;
+        const std::string mapkey_type_name = (detail::Pbtraits<typename T::key_type>::type() == "bytes") ? "string" : detail::Pbtraits<typename T::key_type>::type();
+        const std::string child_type_name = detail::Pbtraits<typename T::mapped_type>::type();
+        const std::string child_value_name = detail::Pbtraits<typename T::mapped_type>::value();
 
-        // MAP处理自己的下级
-        std::string internal_type_name = "__internal_anonymous_message__";
-        std::string internal_value_type;
-        if (is_stl<typename T::mapped_type>::value) {
-            detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-            const auto key_name = protobuf_type<typename T::key_type>();
-            msg[parameter->offset].type = "map<" + (key_name == "bytes" ? "string" : key_name) + ", " + internal_type_name + ">";
+        parent[parameter->offset].type = "map<" + mapkey_type_name + ", " + child_type_name + ">";
+        parent[parameter->offset].name = parameter->subkey;
+
+        if (is_basic<typename T::mapped_type>::value) { // 子类型为基本类型
+            return;
         }
 
-        auto subparam = ParameterPrototype::create_parameter(parameter->detail, internal_value_type);
-        subparam->parent = std::const_pointer_cast<Parameter>(p);
+        // 以下都是复杂类型, 需要插入中间消息, 保证它们的子节点: 1.不再继续存在于当前message内, 2.但同时需要另行建立一个message
+        //    对于子类型为 结构体的 另行建立的message为结构体名称,字段不需要在下层中做向上挂接的动作，但是需要通过触发下层记录结构体自身的完整消息内容
+        //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
+        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
+        child->parent = std::const_pointer_cast<Parameter>(p);
         {
-            detail::EnterProtobufDefineMessageGuard guard(ctx, internal_type_name);
-            subparam->serialize(out);
+            const auto type_name = is_object<typename T::mapped_type>::value ? "__internal_anonymous_message__" : child_type_name;
+            detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
+            child->serialize(out);
         }
     }
 
@@ -233,33 +236,36 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
     }
 };
 
-// SET
+// PTR
 template <typename T>
-class ProtobufDefineSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Serdes {
+class ProtobufDefineSerdes<T, typename std::enable_if<is_smart_ptr<T>::value>::type> : public Serdes {
+public:
+private:
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
-        const auto type_name = is_basic<typename T::value_type>::value ? protobuf_type<typename T::value_type>()
-                                                                       : detail::simplify_message_name(parameter->readable_detail_type());
-
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
-        auto& msg = *(ctx.parent_message_content());
-        msg[parameter->offset].type = "repeated " + type_name;
-        msg[parameter->offset].name = parameter->subkey;
+        auto& parent = *(ctx.parent_message_content());
 
-        // SET处理自己的下级
-        std::string internal_type_name = "__internal_anonymous_message__";
-        std::string internal_value_type;
-        if (is_stl<typename T::value_type>::value) {
-            detail::make_internal_name(parameter->readable_detail_type(), internal_type_name, internal_value_type);
-            msg[parameter->offset].type = "repeated " + internal_type_name;
+        const std::string child_type_name = detail::Pbtraits<typename T::element_type>::type();
+        const std::string child_value_name = detail::Pbtraits<typename T::element_type>::value();
+
+        parent[parameter->offset].type = child_type_name;
+        parent[parameter->offset].name = parameter->subkey;
+
+        if (is_basic<typename T::element_type>::value) { // 子类型为基本类型
+            return;
         }
 
-        auto subparam = ParameterPrototype::create_parameter(parameter->detail, internal_value_type);
-        subparam->parent = std::const_pointer_cast<Parameter>(p);
+        // 以下都是复杂类型, 需要插入中间消息, 保证它们的子节点: 1.不再继续存在于当前message内, 2.但同时需要另行建立一个message
+        //    对于子类型为 结构体的 另行建立的message为结构体名称,字段不需要在下层中做向上挂接的动作，但是需要通过触发下层记录结构体自身的完整消息内容
+        //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
+        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
+        child->parent = std::const_pointer_cast<Parameter>(p);
         {
-            detail::EnterProtobufDefineMessageGuard guard(ctx, internal_type_name);
-            subparam->serialize(out);
+            const auto type_name = is_object<typename T::element_type>::value ? "__internal_anonymous_message__" : child_type_name;
+            detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
+            child->serialize(out);
         }
     }
 

@@ -7,6 +7,7 @@
 
 #include <list>
 #include <map>
+#include <memory>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -33,6 +34,11 @@ enum class ExampleForEnum {
     EFE_C,
     EFE_D,
     EFE_E,
+};
+
+struct ExampleForSmartPtr {
+    std::unique_ptr<int> uptri;
+    std::shared_ptr<std::string> sptrs;
 };
 
 struct ExampleForInheritBase {
@@ -75,6 +81,9 @@ struct ExampleParameter {
     std::set<std::string> ss;
     std::map<std::string, std::list<std::string>> msls;
     std::unordered_map<std::string, ExampleForInheritBase> msefib;
+
+    std::shared_ptr<std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>> sulmse;
+    std::unique_ptr<std::list<std::shared_ptr<ExampleForSmartPtr>>> ulmse;
 
     void init_v1();
     void init_v2();

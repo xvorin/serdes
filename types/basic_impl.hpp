@@ -56,27 +56,11 @@ template <typename T>
 std::string BasicParameter<T>::debug_self() const
 {
     std::stringstream ss;
-    ss << " = " << xvorin::serdes::to_string(value);
+    ss << " = " << xvorin::serdes::to_string(value) << " [" + this->readable_detail_type() + "]";
     if (!comment.empty()) {
         ss << " #" << comment;
     }
-    // if (!verinfo.empty()) {
-    //     ss << " " << ";校验值:" << verinfo;
-    // }
     return ss.str();
-
-    // std::stringstream ss;
-    // ss << " = " << xvorin::serdes::to_string(value) << " ";
-    // ss << "[类型:" << readable_type() << "/" << readable_detail_type();
-    // ss << ";偏移:" << offset;
-    // if (!comment.empty()) {
-    //     ss << ";注释:" << comment;
-    // }
-    // if (!verinfo.empty()) {
-    //     ss << ";校验值:" << verinfo;
-    // }
-    // ss << "]";
-    // return ss.str();
 }
 
 template <typename T>
@@ -84,12 +68,6 @@ std::string BasicParameter<T>::debug_releation(const std::string& prefix) const
 {
     std::stringstream ss;
     ss << prefix << "|" << index() << debug_self();
-
-    // auto p = parent.lock();
-    // if (p) {
-    //     ss << std::endl
-    //        << prefix << "    |PARENT:" << (p ? p->debug_self() : "null");
-    // }
     return ss.str();
 }
 

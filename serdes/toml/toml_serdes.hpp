@@ -246,4 +246,32 @@ class TomlSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Se
     }
 };
 
+// PTR
+template <typename T>
+class TomlSerdes<T, typename std::enable_if<is_smart_ptr<T>::value>::type> : public Serdes {
+public:
+private:
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& tout = (*static_cast<toml::ordered_value*>(out));
+
+        if (parameter->value) {
+            parameter->value->serialize(out);
+        }
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& tin = (*static_cast<const toml::ordered_value*>(in));
+
+        if (!tin.is_empty()) {
+            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0");
+            parameter->value->parent = parameter;
+            parameter->value->deserialize(in);
+        }
+    }
+};
+
 }

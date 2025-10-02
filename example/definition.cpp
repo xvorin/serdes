@@ -2,29 +2,6 @@
 #include "serdes/serdes.h"
 
 // 注册成员
-// DEFINE_PARAM(ExampleForInheritBase, v1, "测试commont1", nullptr, "[1,5);(4,3)");
-// DEFINE_PARAM(ExampleForInheritBase, v2, "测试commont2", nullptr, "(0,5.8]");
-// DEFINE_PARAM(ExampleSubParameter, v3, "测试commont3", nullptr, "^\\d{3}$");
-
-// DEFINE_PARAM(ExampleParameter, x, "整型变量", nullptr);
-// DEFINE_PARAM(ExampleParameter, y, "电话号码", nullptr, "^\\d{3}-\\d{8}$");
-// DEFINE_PARAM(ExampleParameter, z, "布尔变量");
-// DEFINE_PARAM(ExampleParameter, h, "浮点变量");
-// DEFINE_PARAM(ExampleParameter, e, "enum变量");
-
-// DEFINE_PARAM(ExampleParameter, o);
-// DEFINE_PARAM(ExampleParameter, n);
-// DEFINE_PARAM(ExampleParameter, m);
-// DEFINE_PARAM(ExampleParameter, p);
-// DEFINE_PARAM(ExampleParameter, q);
-// DEFINE_PARAM(ExampleParameter, r);
-
-// // 注册继承关系
-// DEFINE_INHERIT(ExampleForInheritBase, ExampleSubParameter);
-
-// // 注册根节点(可选)
-// DEFINE_ROOT(ExampleParameter);
-
 DEFINE_PARAM(ExampleForInteger, i8, "c for i8")
 DEFINE_PARAM(ExampleForInteger, i16, "c for i16")
 DEFINE_PARAM(ExampleForInteger, i32, "c for i32")
@@ -34,10 +11,14 @@ DEFINE_PARAM(ExampleForInteger, ui16, "c for ui16")
 DEFINE_PARAM(ExampleForInteger, ui32, "c for ui32")
 DEFINE_PARAM(ExampleForInteger, ui64, "c for ui64")
 
+DEFINE_PARAM(ExampleForSmartPtr, uptri, "c for uptri")
+DEFINE_PARAM(ExampleForSmartPtr, sptrs, "c for sptrs")
+
 DEFINE_PARAM(ExampleForInheritBase, i, "c for i2")
 DEFINE_PARAM(ExampleForInheritBase, d, "c for d2")
 DEFINE_PARAM(ExampleForInheritBase, s, "c for s2")
 
+// 注册继承关系
 DEFINE_INHERIT(ExampleForInheritBase, ExampleSubParameter);
 
 DEFINE_PARAM(ExampleSubParameter, subs, "c for subs")
@@ -61,7 +42,10 @@ DEFINE_PARAM(ExampleParameter, vvlefi, "c for vvlefi")
 DEFINE_PARAM(ExampleParameter, ss, "c for ss")
 DEFINE_PARAM(ExampleParameter, msls, "c for msls")
 DEFINE_PARAM(ExampleParameter, msefib, "c for msefib")
+DEFINE_PARAM(ExampleParameter, sulmse, "c for sulmse")
+DEFINE_PARAM(ExampleParameter, ulmse, "c for ulmse")
 
+// 注册根节点(可选)
 DEFINE_ROOT(ExampleParameter, "c for ExampleParameter");
 DEFINE_ROOT(ExampleForInheritBase, "c for ExampleForInheritBase");
 DEFINE_ROOT(ExampleSubParameter, "c for ExampleSubParameter");
@@ -178,6 +162,16 @@ void ExampleParameter::init_v1()
 
     msls = { { "MSLS1", { "LS1", "LS2" } } };
     msefib["MSEFIB1"].init_v1();
+
+    sulmse = std::make_shared<std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>>();
+    (*sulmse) = std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>(new std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>());
+
+    (*sulmse)->emplace_back();
+    (*sulmse)->back().emplace("A", nullptr);
+    (*sulmse)->back().emplace("B", std::make_shared<ExampleForSmartPtr>());
+    (*sulmse)->back().emplace("C", std::make_shared<ExampleForSmartPtr>());
+    (*(*sulmse)->back()["C"]).uptri = std::unique_ptr<int>(new int(45));
+    (*(*sulmse)->back()["C"]).sptrs = std::make_shared<std::string>("67");
 }
 
 void ExampleParameter::init_v2()
@@ -248,6 +242,37 @@ void ExampleParameter::init_v3()
 
     msls = { { "MSLS_B", { "LS3", "LS4" } } };
     msefib["MSEFIB3"].init_v3();
+
+    sulmse = std::make_shared<std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>>();
+    (*sulmse) = std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>(new std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>());
+
+    (*sulmse)->emplace_back();
+    (*sulmse)->back().emplace("1", nullptr);
+    (*sulmse)->back().emplace("2", std::make_shared<ExampleForSmartPtr>());
+    (*sulmse)->back().emplace("3", std::make_shared<ExampleForSmartPtr>());
+    (*(*sulmse)->back()["3"]).uptri = std::unique_ptr<int>(new int(3456));
+    (*(*sulmse)->back()["3"]).sptrs = std::make_shared<std::string>("3-678");
+
+    (*sulmse)->emplace_back();
+    (*sulmse)->back().emplace("1", nullptr);
+
+    (*sulmse)->back().emplace("2", std::make_shared<ExampleForSmartPtr>());
+    (*(*sulmse)->back()["2"]).uptri = std::unique_ptr<int>(new int(2456));
+
+    (*sulmse)->back().emplace("3", std::make_shared<ExampleForSmartPtr>());
+    (*(*sulmse)->back()["3"]).uptri = std::unique_ptr<int>(new int(3456));
+    (*(*sulmse)->back()["3"]).sptrs = std::make_shared<std::string>("3-678");
+
+    ulmse = std::unique_ptr<std::list<std::shared_ptr<ExampleForSmartPtr>>>(new std::list<std::shared_ptr<ExampleForSmartPtr>>());
+    ulmse->emplace_back();
+    ulmse->back() = std::make_shared<ExampleForSmartPtr>();
+
+    ulmse->emplace_back();
+    ulmse->back() = std::make_shared<ExampleForSmartPtr>();
+    ulmse->back()->uptri = std::unique_ptr<int>(new int(5687));
+    ulmse->back()->sptrs = std::make_shared<std::string>("Hi World");
+
+    ulmse->emplace_back();
 }
 
 std::string show()

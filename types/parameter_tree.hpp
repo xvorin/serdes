@@ -313,6 +313,10 @@ std::string ParameterTree<T>::debug_string(const std::string& index)
         p = parameter(parse_index(index));
     }
 
+    if (p == nullptr) {
+        throw ParameterNotFound(index);
+    }
+
     std::stringstream ss;
     ss << p->debug_releation();
     return ss.str();
@@ -372,22 +376,5 @@ std::shared_ptr<Parameter> ParameterTree<T>::parameter(std::list<std::string> in
     }
     return index.empty() ? retval : nullptr;
 }
-
-// template<typename T>
-// using PTree<T> = ParameterTree<T, >
-
-// template <typename T, typename... APIs>
-// class PTree : public ParameterTree, public APIs<T>... {
-// public:
-//     // PT()
-//     //     : APIs(this)...
-//     // {
-//     // }
-// };
-
-// class API1 { };
-
-// template <typename T>
-// using WPTree = PTree<T, API1>;
 
 }

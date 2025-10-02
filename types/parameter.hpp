@@ -34,6 +34,7 @@ enum class ParameterType {
     PT_SEQUENCE, // vector or list
     PT_MAP, // map or unordered_map
     PT_SET, // set or unordered_set
+    PT_PTR, // raw pointer & smart pointer
 };
 
 // 参数详细类型(对type_info的包装)
@@ -215,6 +216,7 @@ public:
         pretty = remove_angle_brackets(pretty, ", std::greater_equal<");
         pretty = remove_angle_brackets(pretty, ", std::hash<");
         pretty = remove_angle_brackets(pretty, ", std::equal_to<");
+        pretty = remove_angle_brackets(pretty, ", std::default_delete<");
         pretty = remove_space(pretty);
         pretty = replace(pretty, "std::__cxx11::basic_string<char,std::char_traits<char>>", "std::string");
         pretty = replace(pretty, "__cxx11::", "");

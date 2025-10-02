@@ -103,28 +103,11 @@ template <typename T>
 std::string Composite<T>::debug_self() const
 {
     std::stringstream ss;
-    ss << " size = " << children_.size();
+    ss << " size = " << children_.size() << " [" + this->readable_detail_type() + "]";
     if (!comment.empty()) {
         ss << " #" << comment;
     }
-    // if (!verinfo.empty()) {
-    //     ss << " " << ";校验值:" << verinfo;
-    // }
     return ss.str();
-
-    // std::stringstream ss;
-    // ss << " size = " << children_.size() << " ";
-    // ss << "[类型:" << readable_type() << "/" << readable_detail_type();
-    // ss << ";偏移:" << offset;
-    // if (!comment.empty()) {
-    //     ss << ";注释:" << comment;
-    // }
-    // if (!verinfo.empty()) {
-    //     ss << ";校验值:" << verinfo;
-    // }
-    // ss << (is_stl<T>::value ? ";STL类型:" + Parameter::readable_detail_type(typeid(T)) + "]" : "]");
-
-    // return ss.str();
 }
 
 template <typename T>
@@ -132,21 +115,10 @@ std::string Composite<T>::debug_releation(const std::string& prefix) const
 {
     std::stringstream ss;
     ss << prefix << "|" << index() << debug_self();
-
-    // auto p = parent.lock();
-    // if (p) {
-    //     ss << std::endl
-    //        << prefix << "    |PARENT:" << (p ? p->debug_self() : "null");
-    // }
-
-    // ss << std::endl
-    //    << prefix << "    |CHILDREN:" << children_.size();
-
     for (auto& child : sorted_children()) {
         ss << std::endl
-           << child->debug_releation(prefix + "  ");
+           << child->debug_releation(prefix + "| ");
     }
-
     return ss.str();
 }
 
