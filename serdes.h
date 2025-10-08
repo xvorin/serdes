@@ -15,7 +15,7 @@
 #include "serdes/serdes/protobuf/protobuf_api.hpp"
 #endif
 
-#include "file_monite.h"
+#include "serdes/utils/file_monite.h"
 
 namespace xvorin::serdes {
 
@@ -382,5 +382,8 @@ std::shared_ptr<SerdesTree<T>> instance(const std::string& root)
 {
     return SerdesTree<T>::instance(root);
 }
+
+template <typename T>
+using entity = std::shared_ptr<SerdesTree<T>>;
 
 }

@@ -24,7 +24,7 @@ public:
 
     virtual std::shared_ptr<Parameter> find_child(const std::string& subkey) const override;
     virtual const std::unordered_map<std::string, std::shared_ptr<Parameter>>& children() const override;
-    virtual std::unordered_map<std::string, std::shared_ptr<Parameter>>* mutable_children();
+    virtual std::unordered_map<std::string, std::shared_ptr<Parameter>>* mutable_children() override;
 
     virtual void inform_ancestor(const std::string& index, ParameterInformType pit) const override;
 

@@ -7,7 +7,6 @@ project(serdes VERSION 0.0.1 LANGUAGES CXX)
 # 设置编译器
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 
 # 强制修改 Release 标志，添加调试信息
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -g -DNDEBUG")
@@ -22,6 +21,5 @@ message(STATUS "Install: ${CMAKE_INSTALL_PREFIX}")
 # add_subdirectory(test)
 add_subdirectory(example)
 
-# install(DIRECTORY scripts DESTINATION output)
-# install(DIRECTORY etc DESTINATION output)
-# install(DIRECTORY weights/ DESTINATION output/models)
+install(DIRECTORY types serdes validator utils 3rd DESTINATION include/serdes)
+install(FILES serdes.h DESTINATION include/serdes) 

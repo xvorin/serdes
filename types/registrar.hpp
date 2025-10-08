@@ -86,9 +86,12 @@ public:
             // 保存 父结构体类型 到类型模板容器中
             auto parent = SavePrototypeHelper<P>::save();
             // 删除 成员
-            auto iter = parent->mutable_children().find(subkey);
-            if (iter != parent->mutable_children().end()) {
-                parent->mutable_children().erase(iter);
+            if (nullptr == parent->mutable_children()) {
+                return;
+            }
+            auto iter = parent->mutable_children()->find(subkey);
+            if (iter != parent->mutable_children()->end()) {
+                parent->mutable_children()->erase(iter);
             }
         }
     };
