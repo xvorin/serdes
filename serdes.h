@@ -37,6 +37,10 @@ public:
     /// @param sink_type 配置文件格式
     void set_sink_file(const std::string& sink, ParameterSerdesType sink_type = ParameterSerdesType::PST_TOML);
 
+    /// @brief 是否已经开启文件监控
+    /// @return
+    bool is_monitoring();
+
     /// @brief 读取设置的配置文件格式
     /// @return
     ParameterSerdesType sink_type();
@@ -167,6 +171,12 @@ void CommandLineAPI<T>::set_sink_file(const std::string& sink, ParameterSerdesTy
     // 监控文件变更
     monite_ = std::unique_ptr<FileMonite>(new FileMonite(sink_, std::bind(&CommandLineAPI::reload, this)));
     monite_->start();
+}
+
+template <typename T>
+bool CommandLineAPI<T>::is_monitoring()
+{
+    return nullptr != monite_;
 }
 
 template <typename T>
