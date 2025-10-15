@@ -18,8 +18,12 @@ set(CMAKE_BUILD_TYPE Release)
 message(STATUS "System: ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_VERSION}")
 message(STATUS "Install: ${CMAKE_INSTALL_PREFIX}")
 
-# add_subdirectory(test)
-add_subdirectory(example)
+option(BUILD_EXAMPLES "Build the example programs" OFF)
+
+if(BUILD_EXAMPLES)
+    message(STATUS "Building example")
+    add_subdirectory(example)
+endif()
 
 install(DIRECTORY types serdes validator utils 3rd DESTINATION include/serdes)
 install(FILES serdes.h DESTINATION include/serdes) 

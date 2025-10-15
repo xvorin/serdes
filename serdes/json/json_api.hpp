@@ -1,6 +1,6 @@
 #include "serdes/types/parameter_tree.hpp"
 
-#include <nlohmann/json.hpp>
+#include <serdes/3rd/nlohmann/json.hpp>
 
 namespace xvorin::serdes {
 

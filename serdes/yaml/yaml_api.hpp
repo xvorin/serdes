@@ -1,6 +1,7 @@
 #include "serdes/types/parameter_tree.hpp"
 
-#include <fkYAML/node.hpp>
+#include <serdes/3rd/fkYAML/node.hpp>
+
 namespace fkyaml {
 using ordered_node = basic_node<std::vector, fkyaml::ordered_map>;
 }
