@@ -36,6 +36,14 @@ enum class ExampleForEnum {
     EFE_E,
 };
 
+enum class ExampleForEnumKey {
+    EFEK_A,
+    EFEK_B,
+    EFEK_C,
+    EFEK_D,
+    EFEK_E,
+};
+
 struct ExampleForSmartPtr {
     std::unique_ptr<int> uptri;
     std::shared_ptr<std::string> sptrs;
@@ -56,7 +64,7 @@ struct ExampleSubParameter : public ExampleForInheritBase {
     bool subb;
     double subd;
     float subf;
-    ExampleForEnum subefe;
+    ExampleForEnum subefe = ExampleForEnum::EFE_B;
     ExampleForInteger subefi;
 
     void init_v1();
@@ -70,7 +78,7 @@ struct ExampleParameter {
     double d;
     float f;
     std::string s;
-    ExampleForEnum efe;
+    ExampleForEnum efe = ExampleForEnum::EFE_D;
 
     ExampleForInteger efi;
     ExampleSubParameter esp;
@@ -80,16 +88,16 @@ struct ExampleParameter {
     std::vector<std::vector<std::list<ExampleForInteger>>> vvlefi;
     std::set<std::string> ss;
     std::map<std::string, std::list<std::string>> msls;
-    std::unordered_map<std::string, ExampleForInheritBase> msefib;
+    std::unordered_map<int, ExampleForInheritBase> msefib;
 
     std::shared_ptr<std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>> sulmse;
     std::unique_ptr<std::list<std::shared_ptr<ExampleForSmartPtr>>> ulmse;
 
+    std::map<ExampleForEnumKey, std::shared_ptr<ExampleForEnum>> mekse;
+
     void init_v1();
     void init_v2();
     void init_v3();
-
-    std::string show();
 
     ExampleParameter()
     {

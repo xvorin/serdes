@@ -24,7 +24,7 @@ public:
 
         for (auto& child_pair : (*children)) {
             auto& ochild = child_pair.second;
-            if (ochild->type != ParameterType::PT_OBJECT) {
+            if (ochild->type != ParameterType::PT_OBJECT && ochild->type != ParameterType::PT_ENUM) {
                 continue;
             }
 
@@ -82,5 +82,8 @@ private:
     }
 
     friend class ParameterRegistrar;
+
+    template <typename T, typename E>
+    friend class Converter;
 };
 }

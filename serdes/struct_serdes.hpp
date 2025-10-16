@@ -26,7 +26,7 @@ private:
         auto& sout = *reinterpret_cast<T*>(out);
 
         if (!validator(parameter->value)) {
-            parameter->profile()->violations[p->index()] = to_string(parameter->value);
+            parameter->profile()->violations[p->index()] = Converter<T>::to_string(parameter->value);
             return;
         }
 
@@ -51,7 +51,7 @@ private:
             return;
         }
 
-        parameter->profile()->violations[p->index()] = to_string(parameter->value);
+        parameter->profile()->violations[p->index()] = Converter<T>::to_string(parameter->value);
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
@@ -81,7 +81,7 @@ private:
         auto& sout = *reinterpret_cast<T*>(out);
 
         if (!validator(parameter->value)) {
-            parameter->profile()->violations[p->index()] = to_string(static_cast<int>(parameter->value));
+            parameter->profile()->violations[p->index()] = Converter<T>::to_string(parameter->value);
             return;
         }
 
@@ -106,7 +106,7 @@ private:
             return;
         }
 
-        parameter->profile()->violations[p->index()] = to_string(static_cast<int>(parameter->value));
+        parameter->profile()->violations[p->index()] = Converter<T>::to_string(parameter->value);
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
@@ -163,7 +163,7 @@ class StructSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : pu
                 child->serialize(&sout.back());
                 parameter->profile()->inform_enabled = premitive;
                 if (parameter->profile()->inform_enabled) {
-                    const auto subkey = parameter->index() + "." + to_string(counter);
+                    const auto subkey = parameter->index() + "." + std::to_string(counter);
                     parameter->inform_ancestor(subkey, ParameterInformType::PIT_CREATE);
                 }
             } else {
@@ -179,7 +179,7 @@ class StructSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : pu
         while (sout.size() > counter) {
             sout.pop_back();
             if (parameter->profile()->inform_enabled) {
-                const auto subkey = parameter->index() + "." + to_string(sout.size());
+                const auto subkey = parameter->index() + "." + std::to_string(sout.size());
                 parameter->inform_ancestor(subkey, ParameterInformType::PIT_REMOVE);
             }
         }
@@ -214,7 +214,7 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
 
         std::set<typename T::key_type> subkeys;
         for (const auto& child : parameter->children()) {
-            auto subkey = from_string<typename T::key_type>(child.first);
+            auto subkey = Converter<typename T::key_type>::from_string(child.first);
             if (sout.find(subkey) == sout.end() && parameter->profile()->inform_enabled) {
                 const auto premitive = parameter->profile()->inform_enabled;
                 parameter->profile()->inform_enabled = false;
@@ -229,7 +229,7 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
 
         for (auto iter = sout.begin(); iter != sout.end();) {
             if (subkeys.find(iter->first) == subkeys.end()) {
-                const auto subkey = parameter->index() + "." + to_string(iter->first);
+                const auto subkey = parameter->index() + "." + Converter<typename T::key_type>::to_string(iter->first);
                 iter = sout.erase(iter);
                 if (parameter->profile()->inform_enabled) {
                     parameter->inform_ancestor(subkey, ParameterInformType::PIT_REMOVE);
@@ -249,7 +249,7 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
         children->clear();
 
         for (const auto& spair : sin) {
-            const std::string subkey = to_string(spair.first);
+            const std::string subkey = Converter<typename T::key_type>::to_string(spair.first);
             auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
             child->parent = parameter;
             child->deserialize(&spair.second);

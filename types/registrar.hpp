@@ -120,6 +120,17 @@ public:
         }
     };
 
+    template <typename E> //[E]num
+    struct RegisterEnum {
+        RegisterEnum(E key, const std::string& value)
+        {
+            static_assert(is_enum<E>::value, "Not a enum type!");
+            // 保存 结构体类型 到类型模板容器中
+            auto root = SavePrototypeHelper<E>::save();
+            root->enum_mapping[key] = value;
+        }
+    };
+
     template <typename B, typename D> //[B]ase & [D]rive
     struct RegisterInheritRelation {
         RegisterInheritRelation()
@@ -192,3 +203,7 @@ private:
 #define DEFINE_INHERIT(B, D)                                                 \
     static xvorin::serdes::ParameterRegistrar::RegisterInheritRelation<B, D> \
         PARAMETER_HELPER_NAME(__COUNTER__);
+
+#define DEFINE_ENUM(E, m)                                      \
+    static xvorin::serdes::ParameterRegistrar::RegisterEnum<E> \
+        PARAMETER_HELPER_NAME(__COUNTER__) { E::m, #m };

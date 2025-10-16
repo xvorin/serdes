@@ -20,6 +20,8 @@ std::shared_ptr<Parameter> EnumParameter<T>::clone(std::string newkey, size_t ne
     auto cloned = std::make_shared<EnumParameter<T>>(std::move(newkey), newoffset, comment, inform, verinfo);
     cloned->parent = parent;
     cloned->value = value;
+    cloned->enum_mapping = enum_mapping;
+
     return cloned;
 }
 
@@ -36,6 +38,12 @@ void EnumParameter<T>::deserialize(const void* in)
 }
 
 template <typename T>
+void EnumParameter<T>::from_string(const std::string& in)
+{
+    value = Converter<T>::from_string(in);
+}
+
+template <typename T>
 void EnumParameter<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
 {
     auto p = parent.lock();
@@ -48,27 +56,21 @@ template <typename T>
 std::string EnumParameter<T>::debug_self() const
 {
     std::stringstream ss;
-    ss << " = " << static_cast<int>(value);
+    ss << " = " << Converter<T>::to_string(value) << "(" << static_cast<int>(value) << ")";
+    ss << " [" + this->readable_detail_type();
+    if (!enum_mapping.empty()) {
+        ss << "(";
+        for (auto iter = enum_mapping.begin(); iter != enum_mapping.end(); iter++) {
+            ss << (iter != enum_mapping.begin() ? "," : "") << iter->second;
+        }
+        ss << ")";
+    }
+    ss << "]";
+
     if (!comment.empty()) {
         ss << " #" << comment;
     }
-    // if (!verinfo.empty()) {
-    //     ss << " " << "校验值:" << verinfo;
-    // }
     return ss.str();
-
-    // std::stringstream ss;
-    // ss << " = " << static_cast<int>(value) << " ";
-    // ss << "[类型:" << readable_type() << "/" << readable_detail_type();
-    // ss << ";偏移:" << offset;
-    // if (!comment.empty()) {
-    //     ss << ";注释:" << comment;
-    // }
-    // if (!verinfo.empty()) {
-    //     ss << ";校验值:" << verinfo;
-    // }
-    // ss << "]";
-    // return ss.str();
 }
 
 template <typename T>
@@ -76,12 +78,6 @@ std::string EnumParameter<T>::debug_releation(const std::string& prefix) const
 {
     std::stringstream ss;
     ss << prefix << "|" << index() << debug_self();
-
-    // auto p = parent.lock();
-    // if (p) {
-    //     ss << std::endl
-    //        << prefix << "    |PARENT:" << (p ? p->debug_self() : "null");
-    // }
     return ss.str();
 }
 

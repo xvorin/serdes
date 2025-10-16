@@ -3,7 +3,7 @@
 #include "serdes/serdes/serdes.hpp"
 #include "serdes/types/traits.hpp"
 
-#include <nlohmann/json.hpp>
+#include <serdes/3rd/nlohmann/json.hpp>
 
 namespace xvorin::serdes {
 
@@ -18,7 +18,6 @@ class JsonSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public 
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
-
         jout = nlohmann::ordered_json(parameter->value);
     }
 
@@ -26,7 +25,6 @@ class JsonSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public 
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
-
         parameter->value = jin.get<T>();
     }
 };
@@ -38,16 +36,14 @@ class JsonSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public S
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
-
-        jout = nlohmann::ordered_json(parameter->value);
+        jout = nlohmann::ordered_json(Converter<T>::to_string(parameter->value));
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
-
-        parameter->value = jin.get<T>();
+        parameter->value = Converter<T>::from_string(jin.get<std::string>());
     }
 };
 
@@ -144,8 +140,8 @@ class JsonSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
         children->clear();
 
         for (const auto& jpair : jin.items()) {
-            const auto subkey = jpair.key();
-            auto& jchild = jpair.value();
+            const auto& subkey = jpair.key();
+            const auto& jchild = jpair.value();
             auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
             child->parent = parameter;
             child->deserialize(&jchild);

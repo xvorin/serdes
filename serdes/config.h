@@ -3,7 +3,7 @@
 #define ENABLE_JSON 1
 #define ENABLE_YAML 1
 #define ENABLE_TOML 1
-#define ENABLE_PROTOBUF 0
+#define ENABLE_PROTOBUF 1
 
 namespace xvorin::serdes {
 

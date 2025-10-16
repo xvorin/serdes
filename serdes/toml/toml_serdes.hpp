@@ -3,7 +3,7 @@
 #include "serdes/serdes/serdes.hpp"
 #include "serdes/types/traits.hpp"
 
-#include <toml11/toml.hpp>
+#include <serdes/3rd/toml11/toml.hpp>
 
 namespace xvorin::serdes {
 
@@ -66,7 +66,7 @@ class TomlSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public S
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& tout = (*static_cast<toml::ordered_value*>(out));
-        tout = static_cast<int>(parameter->value);
+        tout = Converter<T>::to_string(parameter->value);
 
         if (!parameter->comment.empty()) {
             tout.comments().push_back(parameter->comment);
@@ -77,7 +77,7 @@ class TomlSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public S
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& tin = (*static_cast<const toml::ordered_value*>(in));
-        parameter->value = static_cast<T>(tin.as_integer());
+        parameter->value = Converter<T>::from_string(tin.as_string());
     }
 };
 
@@ -194,8 +194,8 @@ class TomlSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
         children->clear();
 
         for (const auto& tpair : tin.as_table()) {
-            const auto subkey = to_string(tpair.first);
-            const auto tchild = tpair.second;
+            const auto& subkey = tpair.first;
+            const auto& tchild = tpair.second;
             auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
             child->parent = parameter;
             child->deserialize(&tchild);

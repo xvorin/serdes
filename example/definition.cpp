@@ -11,6 +11,18 @@ DEFINE_PARAM(ExampleForInteger, ui16, "c for ui16")
 DEFINE_PARAM(ExampleForInteger, ui32, "c for ui32")
 DEFINE_PARAM(ExampleForInteger, ui64, "c for ui64")
 
+DEFINE_ENUM(ExampleForEnum, EFE_A)
+DEFINE_ENUM(ExampleForEnum, EFE_B)
+DEFINE_ENUM(ExampleForEnum, EFE_C)
+DEFINE_ENUM(ExampleForEnum, EFE_D)
+DEFINE_ENUM(ExampleForEnum, EFE_E)
+
+DEFINE_ENUM(ExampleForEnumKey, EFEK_A)
+DEFINE_ENUM(ExampleForEnumKey, EFEK_B)
+DEFINE_ENUM(ExampleForEnumKey, EFEK_C)
+DEFINE_ENUM(ExampleForEnumKey, EFEK_D)
+DEFINE_ENUM(ExampleForEnumKey, EFEK_E)
+
 DEFINE_PARAM(ExampleForSmartPtr, uptri, "c for uptri")
 DEFINE_PARAM(ExampleForSmartPtr, sptrs, "c for sptrs")
 
@@ -44,6 +56,7 @@ DEFINE_PARAM(ExampleParameter, msls, "c for msls")
 DEFINE_PARAM(ExampleParameter, msefib, "c for msefib")
 DEFINE_PARAM(ExampleParameter, sulmse, "c for sulmse")
 DEFINE_PARAM(ExampleParameter, ulmse, "c for ulmse")
+DEFINE_PARAM(ExampleParameter, mekse, "c for mekse")
 
 // 注册根节点(可选)
 DEFINE_ROOT(ExampleParameter, "c for ExampleParameter");
@@ -161,7 +174,7 @@ void ExampleParameter::init_v1()
     ss = { "A", "B", "C" };
 
     msls = { { "MSLS1", { "LS1", "LS2" } } };
-    msefib["MSEFIB1"].init_v1();
+    msefib[1].init_v1();
 
     sulmse = std::make_shared<std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>>();
     (*sulmse) = std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>(new std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>());
@@ -203,7 +216,7 @@ void ExampleParameter::init_v2()
     ss = { "D", "E", "F", "K" };
 
     msls = { { "MSLS_A", { "LS1", "LS2" } }, { "MSLS_B", { "LS3", "LS4" } } };
-    msefib["MSEFIB2"].init_v2();
+    msefib[2].init_v2();
 }
 
 void ExampleParameter::init_v3()
@@ -213,7 +226,7 @@ void ExampleParameter::init_v3()
     d = 17.9;
     f = 15.1;
     s = "Hi~";
-    efe = ExampleForEnum::EFE_E;
+    efe = ExampleForEnum::EFE_C;
 
     efi.init_v3();
     esp.init_v3();
@@ -241,7 +254,7 @@ void ExampleParameter::init_v3()
     ss = { "A", "D", "E", "F", "K" };
 
     msls = { { "MSLS_B", { "LS3", "LS4" } } };
-    msefib["MSEFIB3"].init_v3();
+    msefib[3].init_v3();
 
     sulmse = std::make_shared<std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>>();
     (*sulmse) = std::unique_ptr<std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>>(new std::list<std::map<std::string, std::shared_ptr<ExampleForSmartPtr>>>());
@@ -273,9 +286,7 @@ void ExampleParameter::init_v3()
     ulmse->back()->sptrs = std::make_shared<std::string>("Hi World");
 
     ulmse->emplace_back();
-}
 
-std::string show()
-{
-    return "";
+    mekse[ExampleForEnumKey::EFEK_B] = std::make_shared<ExampleForEnum>(ExampleForEnum::EFE_B);
+    mekse[ExampleForEnumKey::EFEK_D] = std::make_shared<ExampleForEnum>(ExampleForEnum::EFE_D);
 }

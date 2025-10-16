@@ -4,8 +4,6 @@
 #include "serdes/serdes/serdes.hpp"
 #include "serdes/types/traits.hpp"
 
-#include "serdes/types/map_key.hpp"
-
 #include <iostream>
 #include <type_traits>
 
@@ -311,14 +309,16 @@ class ProtobufSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : publ
         const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
         auto field = parent->descriptor()->FindFieldByName(field_name);
-        if (!field) {
+        if (!field || field->type() != google::protobuf::FieldDescriptor::TYPE_ENUM) {
             return;
         }
 
+        auto value = field->enum_type()->FindValueByName(Converter<T>::to_string(parameter->value));
+
         if (parent->is_repeated()) { // repeated 修饰的enum类型
-            detail::protobuf_add_repeated_value(parent->message(), field, static_cast<int>(parameter->value));
+            detail::protobuf_add_repeated_value(parent->message(), field, value);
         } else {
-            detail::protobuf_set_value(parent->message(), field, static_cast<int>(parameter->value));
+            detail::protobuf_set_value(parent->message(), field, value);
         }
     }
 
@@ -330,15 +330,17 @@ class ProtobufSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : publ
         const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
 
         auto field = parent->descriptor()->FindFieldByName(field_name);
-        if (!field) {
+        if (!field || field->type() != google::protobuf::FieldDescriptor::TYPE_ENUM) {
             return;
         }
 
+        const google::protobuf::EnumValueDescriptor* value = nullptr;
         if (parent->is_repeated()) { // repeated 修饰的基本类型
-            parameter->value = static_cast<T>(detail::protobuf_get_repeated_value<int>(parent->message(), field, parent->repeat_index()));
+            value = detail::protobuf_get_repeated_value<decltype(value)>(parent->message(), field, parent->repeat_index());
         } else {
-            parameter->value = static_cast<T>(detail::protobuf_get_value<int>(parent->message(), field));
+            value = detail::protobuf_get_value<decltype(value)>(parent->message(), field);
         }
+        parameter->value = Converter<T>::from_string(value->name());
     }
 };
 
@@ -494,8 +496,12 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
 
             // set key
             {
-                auto subkey = from_string<typename T::key_type>(child->subkey);
-                detail::protobuf_set_value(entry, key_field, subkey);
+                if (std::is_enum<typename T::key_type>::value) {
+                    detail::protobuf_set_value(entry, key_field, child->subkey);
+                } else {
+                    auto subkey = Converter<typename T::key_type>::from_string(child->subkey);
+                    detail::protobuf_set_value(entry, key_field, subkey);
+                }
             }
 
             // set value
@@ -541,7 +547,12 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
             const auto& entry = parent->message()->GetReflection()->GetRepeatedMessage(*(parent->message()), field, i);
 
             // get key
-            const auto subkey = to_string<typename T::key_type>(detail::protobuf_get_value<typename T::key_type>(&entry, key_field));
+            std::string subkey;
+            if (std::is_enum<typename T::key_type>::value) {
+                subkey = detail::protobuf_get_value<std::string>(&entry, key_field);
+            } else {
+                subkey = Converter<typename T::key_type>::to_string(detail::protobuf_get_value<typename T::key_type>(&entry, key_field));
+            }
 
             // get value
             {

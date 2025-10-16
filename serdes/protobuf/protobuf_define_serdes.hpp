@@ -38,10 +38,18 @@ struct ProtobufDefineSerdesContext {
             }
 
             ss << std::endl;
-            ss << "message " << c.first << " {" << std::endl;
-            size_t index = 1;
-            for (auto& item : c.second) {
-                ss << "    " << item.second.type << " " << item.second.name << " = " << index++ << ";" << std::endl;
+            if (!c.second.empty() && c.second.begin()->first < 0) { // trick! first < 0 for enum
+                ss << "enum " << c.first << " {" << std::endl;
+                size_t index = 0;
+                for (auto& item : c.second) {
+                    ss << "    " << item.second.type << " = " << index++ << ";" << std::endl;
+                }
+            } else {
+                ss << "message " << c.first << " {" << std::endl;
+                size_t index = 1;
+                for (auto& item : c.second) {
+                    ss << "    " << item.second.type << " " << item.second.name << " = " << index++ << ";" << std::endl;
+                }
             }
             ss << "}" << std::endl;
         }
@@ -118,8 +126,18 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_enum<T>::value>::type> 
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto& parent = *(ctx.parent_message_content());
 
-        parent[parameter->offset].type = "int32";
+        const auto type_name = detail::Pbtraits<T>::type();
+        parent[parameter->offset].type = type_name;
         parent[parameter->offset].name = parameter->subkey;
+
+        if (!ctx.contains(type_name)) {
+            detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
+            auto& parent = *(ctx.parent_message_content());
+            int index = 0;
+            for (auto iter = parameter->enum_mapping.rbegin(); iter != parameter->enum_mapping.rend(); iter++) {
+                parent[index--].type = iter->second;
+            }
+        }
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
@@ -207,7 +225,8 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto& parent = *(ctx.parent_message_content());
 
-        const std::string mapkey_type_name = (detail::Pbtraits<typename T::key_type>::type() == "bytes") ? "string" : detail::Pbtraits<typename T::key_type>::type();
+        const bool str_as_key = (detail::Pbtraits<typename T::key_type>::type() == "bytes" || is_enum<typename T::key_type>::value);
+        const std::string mapkey_type_name = str_as_key ? "string" : detail::Pbtraits<typename T::key_type>::type();
         const std::string child_type_name = detail::Pbtraits<typename T::mapped_type>::type();
         const std::string child_value_name = detail::Pbtraits<typename T::mapped_type>::value();
 
@@ -253,7 +272,7 @@ private:
         parent[parameter->offset].type = child_type_name;
         parent[parameter->offset].name = parameter->subkey;
 
-        if (is_basic<typename T::element_type>::value) { // 子类型为基本类型
+        if (is_basic<typename T::element_type>::value || is_enum<typename T::element_type>::value) { // 子类型为基本类型
             return;
         }
 
@@ -274,5 +293,4 @@ private:
         // do nothing
     }
 };
-
 }

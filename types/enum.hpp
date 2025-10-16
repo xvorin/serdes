@@ -22,6 +22,8 @@ public:
     virtual void serialize(void* out) const override;
     virtual void deserialize(const void* in) override;
 
+    virtual void from_string(const std::string& in) override;
+
     virtual void inform_ancestor(const std::string& index, ParameterInformType pit) const override;
 
     virtual std::string debug_self() const override;
@@ -30,6 +32,7 @@ public:
 public:
     T value;
     const informant inform;
+    std::map<T, std::string> enum_mapping;
 
 private:
     std::shared_ptr<MultiSerdes<T>> serdes_;

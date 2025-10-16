@@ -3,7 +3,7 @@
 #include "serdes/serdes/serdes.hpp"
 #include "serdes/types/traits.hpp"
 
-#include <fkYAML/node.hpp>
+#include <serdes/3rd/fkYAML/node.hpp>
 
 namespace fkyaml {
 using ordered_node = basic_node<std::vector, fkyaml::ordered_map>;
@@ -42,14 +42,14 @@ class YamlSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public S
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
-        yout = static_cast<int>(parameter->value);
+        yout = Converter<T>::to_string(parameter->value);
     }
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
-        parameter->value = static_cast<T>(yin.as_int());
+        parameter->value = Converter<T>::from_string(yin.as_str());
     }
 };
 

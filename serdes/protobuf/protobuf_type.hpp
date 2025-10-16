@@ -55,13 +55,24 @@ struct Pbtraits<T, typename std::enable_if<std::is_same<T, uint64_t>::value>::ty
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, std::string>::value>::type> {
-    static std::string type() { return "bytes"; }
+    static std::string type() { return "string"; }
     static std::string value() { return std::string(); }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, bool>::value>::type> {
     static std::string type() { return "bool"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_enum<T>::value>::type> {
+    static std::string type()
+    {
+        std::vector<std::string> pieces;
+        xvorin::serdes::utils::split(Parameter::readable_detail_type(typeid(T)), pieces, "::");
+        return pieces.back();
+    }
     static std::string value() { return std::string(); }
 };
 
@@ -114,7 +125,9 @@ template <typename T>
 struct Pbtraits<T, typename std::enable_if<is_object<T>::value>::type> {
     static std::string type()
     {
-        return generate_pbtype_name(Parameter::readable_detail_type(typeid(T)));
+        std::vector<std::string> pieces;
+        xvorin::serdes::utils::split(Parameter::readable_detail_type(typeid(T)), pieces, "::");
+        return pieces.back();
     }
     static std::string value() { return std::string(); }
 };
@@ -135,7 +148,7 @@ struct Pbtraits<T, typename std::enable_if<is_stl<T>::value>::type> {
 template <typename T>
 inline void protobuf_set_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, T value)
 {
-    msg->GetReflection()->SetInt32(msg, field, value);
+    msg->GetReflection()->SetInt32(msg, field, static_cast<int32_t>(value));
 }
 
 template <>
@@ -186,10 +199,16 @@ inline void protobuf_set_value(google::protobuf::Message* msg, const google::pro
     msg->GetReflection()->SetBool(msg, field, value);
 }
 
+template <>
+inline void protobuf_set_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, const google::protobuf::EnumValueDescriptor* value)
+{
+    msg->GetReflection()->SetEnum(msg, field, value);
+}
+
 template <typename T>
 inline T protobuf_get_value(const google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field)
 {
-    return msg->GetReflection()->GetInt32(*msg, field);
+    return static_cast<T>(msg->GetReflection()->GetInt32(*msg, field));
 }
 
 template <>
@@ -238,6 +257,12 @@ template <>
 inline bool protobuf_get_value(const google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field)
 {
     return msg->GetReflection()->GetBool(*msg, field);
+}
+
+template <>
+inline const google::protobuf::EnumValueDescriptor* protobuf_get_value(const google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field)
+{
+    return msg->GetReflection()->GetEnum(*msg, field);
 }
 
 template <typename T>
@@ -291,6 +316,12 @@ template <>
 inline void protobuf_set_repeated_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, int index, bool value)
 {
     msg->GetReflection()->SetRepeatedBool(msg, field, index, value);
+}
+
+template <>
+inline void protobuf_set_repeated_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, int index, const google::protobuf::EnumValueDescriptor* value)
+{
+    msg->GetReflection()->SetRepeatedEnum(msg, field, index, value);
 }
 
 template <typename T>
@@ -347,6 +378,12 @@ inline bool protobuf_get_repeated_value(const google::protobuf::Message* msg, co
     return msg->GetReflection()->GetRepeatedBool(*msg, field, index);
 }
 
+template <>
+inline const google::protobuf::EnumValueDescriptor* protobuf_get_repeated_value(const google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, int index)
+{
+    return msg->GetReflection()->GetRepeatedEnum(*msg, field, index);
+}
+
 template <typename T>
 inline void protobuf_add_repeated_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, T value)
 {
@@ -399,6 +436,12 @@ template <>
 inline void protobuf_add_repeated_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, bool value)
 {
     msg->GetReflection()->AddBool(msg, field, value);
+}
+
+template <>
+inline void protobuf_add_repeated_value(google::protobuf::Message* msg, const google::protobuf::FieldDescriptor* field, const google::protobuf::EnumValueDescriptor* value)
+{
+    msg->GetReflection()->AddEnum(msg, field, value);
 }
 
 }

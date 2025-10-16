@@ -3,7 +3,7 @@
 #include "serdes/serdes/multi_serdes.hpp"
 #include "serdes/types/basic.hpp"
 
-#include "serdes/types/map_key.hpp"
+#include "serdes/utils/converter.h"
 
 namespace xvorin::serdes {
 
@@ -40,7 +40,7 @@ void BasicParameter<T>::deserialize(const void* in)
 template <typename T>
 void BasicParameter<T>::from_string(const std::string& in)
 {
-    value = xvorin::serdes::from_string<T>(in);
+    value = Converter<T>::from_string(in);
 }
 
 template <typename T>
@@ -56,7 +56,7 @@ template <typename T>
 std::string BasicParameter<T>::debug_self() const
 {
     std::stringstream ss;
-    ss << " = " << xvorin::serdes::to_string(value) << " [" + this->readable_detail_type() + "]";
+    ss << " = " << Converter<T>::to_string(value) << " [" + this->readable_detail_type() + "]";
     if (!comment.empty()) {
         ss << " #" << comment;
     }

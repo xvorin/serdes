@@ -66,8 +66,8 @@ public:
                 continue;
             }
 
-            const T low_value = from_string<T>(low.substr(1));
-            const T high_value = from_string<T>(high.substr(0, high.size() - 1));
+            const T low_value = Converter<T>::from_string(low.substr(1));
+            const T high_value = Converter<T>::from_string(high.substr(0, high.size() - 1));
 
             if (low_value > high_value) {
                 continue;
@@ -80,8 +80,8 @@ public:
         for (size_t i = 0; i < range_.size(); i++) {
             const auto& low = range_[i].first;
             const auto& high = range_[i].second;
-            ss << (low.hit ? "[" : "(") << to_string<T>(low.value) << ","
-               << to_string<T>(high.value) << (high.hit ? "]" : ")");
+            ss << (low.hit ? "[" : "(") << Converter<T>::to_string(low.value) << ","
+               << Converter<T>::to_string(high.value) << (high.hit ? "]" : ")");
             if (i < range_.size() - 1) {
                 ss << ";";
             }
@@ -117,7 +117,7 @@ public:
         utils::split(verinfo, limits, ",");
 
         for (auto& limit : limits) {
-            values_.insert(from_string<int>(limit));
+            values_.insert(Converter<int>::from_string(limit));
         }
     }
 
