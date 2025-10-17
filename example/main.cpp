@@ -60,7 +60,7 @@ void for_pbtxt(int argc, char** argv)
 {
     auto ep1 = xvorin::serdes::create<ExampleParameter>();
 
-    std::cout << ep1->to_pbdef("root") << std::endl;
+    std::cout << ep1->to_pbdef() << std::endl;
 
     ep1->set_sink_file("extest1.pbtxt", xvorin::serdes::ParameterSerdesType::PST_PBFMT);
     ep1->parse_command_line(argc, argv);

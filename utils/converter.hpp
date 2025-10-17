@@ -1,10 +1,13 @@
 #pragma once
 
+#include "serdes/utils/base64.hpp"
+#include "serdes/utils/utils.hpp"
+
+#include "serdes/types/prototype.hpp"
+
 #include <sstream>
 #include <string>
 #include <type_traits>
-
-#include "serdes/types/prototype.hpp"
 
 namespace xvorin::serdes {
 
@@ -49,6 +52,21 @@ struct Converter<T, typename std::enable_if<std::is_same<T, std::string>::value>
     static T from_string(const std::string& s)
     {
         return s;
+    }
+};
+
+// buffer
+template <typename T>
+struct Converter<T, typename std::enable_if<std::is_same<T, buffer>::value>::type> {
+    static std::string to_string(T t)
+    {
+        return (utils::is_ascii_string(t) || utils::is_utf8_string(t)) ? t : base64_encode(t);
+    }
+
+    static T from_string(const std::string& s)
+    {
+        auto t = base64_decode(s);
+        return t.empty() ? s : t;
     }
 };
 

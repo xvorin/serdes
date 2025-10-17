@@ -13,7 +13,7 @@ class JsonSerdes : public Serdes {
 
 // BASIC
 template <typename T>
-class JsonSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public Serdes {
+class JsonSerdes<T, typename std::enable_if<is_basic<T>::value && !std::is_same<T, buffer>::value>::type> : public Serdes {
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
@@ -26,6 +26,24 @@ class JsonSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public 
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
         parameter->value = jin.get<T>();
+    }
+};
+
+// BASIC-buffer
+template <typename T>
+class JsonSerdes<T, typename std::enable_if<std::is_same<T, buffer>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
+        jout = nlohmann::ordered_json(base64_encode(parameter->value));
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
+        parameter->value = base64_decode(jin.get<T>());
     }
 };
 

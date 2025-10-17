@@ -24,7 +24,7 @@ public:
     std::string to_pbtxt();
     std::string to_pbtxt(const std::string& index);
 
-    std::string to_pbdef(const std::string& package);
+    std::string to_pbdef(const std::string& package = "");
     std::string to_pbdef_internal(const std::string& index, const std::string& package = "");
 
     std::string to_pbdbstr(bool simplified = false);

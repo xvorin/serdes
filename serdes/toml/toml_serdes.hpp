@@ -13,7 +13,7 @@ class TomlSerdes : public Serdes {
 
 // BASIC
 template <typename T>
-class TomlSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public Serdes {
+class TomlSerdes<T, typename std::enable_if<is_basic<T>::value && !std::is_same<T, buffer>::value>::type> : public Serdes {
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
@@ -56,6 +56,28 @@ class TomlSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public 
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& tin = (*static_cast<const toml::ordered_value*>(in));
         from_toml_value(parameter->value, tin);
+    }
+};
+
+// BASIC-buffer
+template <typename T>
+class TomlSerdes<T, typename std::enable_if<std::is_same<T, buffer>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& tout = (*static_cast<toml::ordered_value*>(out));
+        tout = base64_encode(parameter->value);
+
+        if (!parameter->comment.empty()) {
+            tout.comments().push_back(parameter->comment);
+        }
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& tin = (*static_cast<const toml::ordered_value*>(in));
+        parameter->value = base64_decode(tin.as_string());
     }
 };
 

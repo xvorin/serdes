@@ -60,6 +60,12 @@ struct Pbtraits<T, typename std::enable_if<std::is_same<T, std::string>::value>:
 };
 
 template <typename T>
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, buffer>::value>::type> {
+    static std::string type() { return "bytes"; }
+    static std::string value() { return std::string(); }
+};
+
+template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, bool>::value>::type> {
     static std::string type() { return "bool"; }
     static std::string value() { return std::string(); }

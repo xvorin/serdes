@@ -25,5 +25,6 @@ if(BUILD_EXAMPLES)
     add_subdirectory(example)
 endif()
 
-install(DIRECTORY types serdes validator utils 3rd DESTINATION include/serdes)
-install(FILES serdes.h DESTINATION include/serdes) 
+install(DIRECTORY types serdes validator utils DESTINATION include/serdes)
+install(DIRECTORY 3rd/fkYAML 3rd/nlohmann 3rd/toml11 DESTINATION include/serdes/3rd)
+install(FILES serdes.h DESTINATION include/serdes)

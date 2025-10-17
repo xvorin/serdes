@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "serdes/serdes.h"
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -42,6 +44,18 @@ enum class ExampleForEnumKey {
     EFEK_C,
     EFEK_D,
     EFEK_E,
+};
+
+enum class ExampleForEnumUnderSequence {
+    EFEUS_A,
+    EFEUS_B,
+    EFEUS_C,
+};
+
+enum class ExampleForEnumUnderMap {
+    EFEUM_A,
+    EFEUM_B,
+    EFEUM_C,
 };
 
 struct ExampleForSmartPtr {
@@ -94,6 +108,10 @@ struct ExampleParameter {
     std::unique_ptr<std::list<std::shared_ptr<ExampleForSmartPtr>>> ulmse;
 
     std::map<ExampleForEnumKey, std::shared_ptr<ExampleForEnum>> mekse;
+    std::set<ExampleForEnumUnderSequence> sefeus;
+    std::map<ExampleForEnumKey, ExampleForEnumUnderMap> mekes;
+
+    xvorin::serdes::buffer buffer;
 
     void init_v1();
     void init_v2();

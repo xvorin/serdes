@@ -258,7 +258,7 @@ class ProtobufSerdes : public Serdes {
 
 // BASIC
 template <typename T>
-class ProtobufSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public Serdes {
+class ProtobufSerdes<T, typename std::enable_if<is_basic<T>::value && !std::is_same<T, buffer>::value>::type> : public Serdes {
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
@@ -294,6 +294,48 @@ class ProtobufSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : pub
             parameter->value = detail::protobuf_get_repeated_value<T>(parent->message(), field, parent->repeat_index());
         } else {
             parameter->value = detail::protobuf_get_value<T>(parent->message(), field);
+        }
+    }
+};
+
+// BASIC-buffer
+template <typename T>
+class ProtobufSerdes<T, typename std::enable_if<std::is_same<T, buffer>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
+
+        if (parent->is_repeated()) { // repeated 修饰的基本类型
+            detail::protobuf_add_repeated_value(parent->message(), field, static_cast<std::string>(parameter->value));
+        } else {
+            detail::protobuf_set_value(parent->message(), field, static_cast<std::string>(parameter->value));
+        }
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
+
+        if (parent->is_repeated()) { // repeated 修饰的基本类型
+            parameter->value = detail::protobuf_get_repeated_value<std::string>(parent->message(), field, parent->repeat_index());
+        } else {
+            parameter->value = detail::protobuf_get_value<std::string>(parent->message(), field);
         }
     }
 };

@@ -204,7 +204,8 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_sequence<T>::value || i
         auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
         child->parent = std::const_pointer_cast<Parameter>(p);
         {
-            const auto type_name = is_object<typename T::value_type>::value ? "__internal_anonymous_message__" : child_type_name;
+            const bool anonymous = (is_object<typename T::value_type>::value || is_enum<typename T::value_type>::value);
+            const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
             detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
             child->serialize(out);
         }
@@ -243,7 +244,8 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
         auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
         child->parent = std::const_pointer_cast<Parameter>(p);
         {
-            const auto type_name = is_object<typename T::mapped_type>::value ? "__internal_anonymous_message__" : child_type_name;
+            const bool anonymous = (is_object<typename T::mapped_type>::value || is_enum<typename T::mapped_type>::value);
+            const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
             detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
             child->serialize(out);
         }
@@ -272,7 +274,7 @@ private:
         parent[parameter->offset].type = child_type_name;
         parent[parameter->offset].name = parameter->subkey;
 
-        if (is_basic<typename T::element_type>::value || is_enum<typename T::element_type>::value) { // 子类型为基本类型
+        if (is_basic<typename T::element_type>::value) { // 子类型为基本类型
             return;
         }
 
@@ -282,7 +284,8 @@ private:
         auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
         child->parent = std::const_pointer_cast<Parameter>(p);
         {
-            const auto type_name = is_object<typename T::element_type>::value ? "__internal_anonymous_message__" : child_type_name;
+            const bool anonymous = (is_object<typename T::element_type>::value || is_enum<typename T::element_type>::value);
+            const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
             detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
             child->serialize(out);
         }

@@ -23,6 +23,14 @@ DEFINE_ENUM(ExampleForEnumKey, EFEK_C)
 DEFINE_ENUM(ExampleForEnumKey, EFEK_D)
 DEFINE_ENUM(ExampleForEnumKey, EFEK_E)
 
+DEFINE_ENUM(ExampleForEnumUnderSequence, EFEUS_A)
+DEFINE_ENUM(ExampleForEnumUnderSequence, EFEUS_B)
+DEFINE_ENUM(ExampleForEnumUnderSequence, EFEUS_C)
+
+DEFINE_ENUM(ExampleForEnumUnderMap, EFEUM_A)
+DEFINE_ENUM(ExampleForEnumUnderMap, EFEUM_B)
+DEFINE_ENUM(ExampleForEnumUnderMap, EFEUM_C)
+
 DEFINE_PARAM(ExampleForSmartPtr, uptri, "c for uptri")
 DEFINE_PARAM(ExampleForSmartPtr, sptrs, "c for sptrs")
 
@@ -57,6 +65,9 @@ DEFINE_PARAM(ExampleParameter, msefib, "c for msefib")
 DEFINE_PARAM(ExampleParameter, sulmse, "c for sulmse")
 DEFINE_PARAM(ExampleParameter, ulmse, "c for ulmse")
 DEFINE_PARAM(ExampleParameter, mekse, "c for mekse")
+DEFINE_PARAM(ExampleParameter, buffer, "c for buffer")
+DEFINE_PARAM(ExampleParameter, sefeus, "c for sefeus")
+DEFINE_PARAM(ExampleParameter, mekes, "c for mekes")
 
 // 注册根节点(可选)
 DEFINE_ROOT(ExampleParameter, "c for ExampleParameter");
@@ -289,4 +300,10 @@ void ExampleParameter::init_v3()
 
     mekse[ExampleForEnumKey::EFEK_B] = std::make_shared<ExampleForEnum>(ExampleForEnum::EFE_B);
     mekse[ExampleForEnumKey::EFEK_D] = std::make_shared<ExampleForEnum>(ExampleForEnum::EFE_D);
+    sefeus.insert(ExampleForEnumUnderSequence::EFEUS_B);
+    sefeus.insert(ExampleForEnumUnderSequence::EFEUS_C);
+    mekes[ExampleForEnumKey::EFEK_A] = ExampleForEnumUnderMap::EFEUM_A;
+    mekes[ExampleForEnumKey::EFEK_C] = ExampleForEnumUnderMap::EFEUM_C;
+
+    buffer = std::string(64, '\0');
 }

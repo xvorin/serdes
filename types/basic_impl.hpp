@@ -3,7 +3,7 @@
 #include "serdes/serdes/multi_serdes.hpp"
 #include "serdes/types/basic.hpp"
 
-#include "serdes/utils/converter.h"
+#include "serdes/utils/converter.hpp"
 
 namespace xvorin::serdes {
 

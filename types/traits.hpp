@@ -12,8 +12,18 @@
 
 namespace xvorin::serdes {
 
+class buffer : public std::string {
+public:
+    using std::string::string;
+    buffer() = default;
+    buffer(const std::string& s)
+        : std::string(s)
+    {
+    }
+};
+
 template <typename T>
-struct is_basic : std::integral_constant<bool, std::is_arithmetic<T>::value || std::is_same<T, std::string>::value> {
+struct is_basic : std::integral_constant<bool, std::is_arithmetic<T>::value || std::is_same<T, std::string>::value || std::is_same<T, buffer>::value> {
 };
 
 template <typename T>

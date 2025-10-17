@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -42,6 +44,45 @@ inline std::string replace(const std::string& str, const std::string& o, const s
     }
 
     return result;
+}
+
+inline bool is_ascii_string(const std::string& s)
+{
+    return std::all_of(s.begin(), s.end(), [](const char& c) {
+        return std::isprint(static_cast<unsigned char>(c));
+    });
+}
+
+inline bool is_utf8_string(const std::string& s)
+{
+    for (size_t i = 0; i < s.length();) {
+        const unsigned char c = s[i];
+
+        if (c <= 0x7F) { // ASCII 字符
+            if (!std::isprint(c) && c != '\t' && c != '\n' && c != '\r') {
+                return false;
+            }
+            i++;
+        } else if ((c & 0xE0) == 0xC0) { // 2字节UTF-8
+            i += 2;
+            if (i > s.length()) {
+                return false;
+            }
+        } else if ((c & 0xF0) == 0xE0) { // 3字节UTF-8（包括中文）
+            i += 3;
+            if (i > s.length()) {
+                return false;
+            }
+        } else if ((c & 0xF8) == 0xF0) { // 4字节UTF-8
+            i += 4;
+            if (i > s.length()) {
+                return false;
+            }
+        } else {
+            return false; // 无效的UTF-8序列
+        }
+    }
+    return true;
 }
 
 } // namespace xvorin::serdes

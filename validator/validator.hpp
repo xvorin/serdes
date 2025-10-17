@@ -131,7 +131,7 @@ struct Validator<T, typename std::enable_if<std::is_same<T, std::string>::value>
 public:
     bool operator()(const T& value) const
     {
-        if (!is_ascii_string(value) && !is_utf8_string(value)) {
+        if (!utils::is_ascii_string(value) && !utils::is_utf8_string(value)) {
             return false;
         }
 
@@ -149,41 +149,22 @@ public:
         pattern_ = verinfo;
     }
 
-    bool is_ascii_string(const std::string& s) const
+private:
+    std::string pattern_;
+};
+
+// buffer
+template <typename T>
+struct Validator<T, typename std::enable_if<std::is_same<T, buffer>::value>::type> {
+public:
+    bool operator()(const T& value) const
     {
-        return std::all_of(s.begin(), s.end(), [](const char& c) {
-            return (0 == (c & 0x80));
-        });
+        return true;
     }
 
-    bool is_utf8_string(const std::string& s) const
+    void parse_verification_info(const std::string& verinfo)
     {
-        int check_sub = 0;
-        for (auto c : s) {
-            if (check_sub == 0) {
-                if ((c >> 7) == 0) { // 0xxx xxxx
-                    continue;
-                } else if ((c & 0xE0) == 0xC0) { // 110x xxxx
-                    check_sub = 1;
-                } else if ((c & 0xF0) == 0xE0) { // 1110 xxxx
-                    check_sub = 2;
-                } else if ((c & 0xF8) == 0xF0) { // 1111 0xxx
-                    check_sub = 3;
-                } else if ((c & 0xFC) == 0xF8) { // 1111 10xx
-                    check_sub = 4;
-                } else if ((c & 0xFE) == 0xFC) { // 1111 110x
-                    check_sub = 5;
-                } else {
-                    return false;
-                }
-            } else {
-                if ((c & 0xC0) != 0x80) {
-                    return false;
-                }
-                check_sub--;
-            }
-        }
-        return true;
+        pattern_ = verinfo;
     }
 
 private:

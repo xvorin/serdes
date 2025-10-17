@@ -1,6 +1,6 @@
 #pragma once
 
-#include "serdes/utils/exception.h"
+#include "serdes/utils/exception.hpp"
 
 #include <algorithm>
 #include <memory>

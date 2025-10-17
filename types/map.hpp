@@ -3,7 +3,7 @@
 #include "serdes/types/composite.hpp"
 #include "serdes/types/traits.hpp"
 
-#include "serdes/utils/converter.h"
+#include "serdes/utils/converter.hpp"
 
 namespace xvorin::serdes {
 

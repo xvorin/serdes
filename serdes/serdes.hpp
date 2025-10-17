@@ -7,6 +7,8 @@
 #include "serdes/types/sequence.hpp"
 #include "serdes/types/set.hpp"
 
+#include "serdes/utils/base64.hpp"
+
 #include <mutex>
 
 namespace xvorin::serdes {

@@ -15,7 +15,7 @@
 #include "serdes/serdes/protobuf/protobuf_api.hpp"
 #endif
 
-#include "serdes/utils/file_monite.h"
+#include "serdes/utils/file_monite.hpp"
 
 namespace xvorin::serdes {
 
