@@ -31,7 +31,8 @@ struct TraitedParameter<T, typename std::enable_if<is_object<T>::value>::type> :
 
         // 添加基类的成员
         for (auto& base : this->bases) {
-            for (const auto& child : xvorin::serdes::ParameterPrototype::create_parameter(base, "temporary")->children()) {
+            auto base_parameter = ParameterPrototype::create_parameter(base, "temporary");
+            for (const auto& child : base_parameter->children()) {
                 auto cloned_child = child.second->clone(child.second->subkey, child.second->offset);
                 cloned_child->parent = cloned;
                 cloned->mutable_children()->emplace(child.first, cloned_child);
@@ -39,6 +40,24 @@ struct TraitedParameter<T, typename std::enable_if<is_object<T>::value>::type> :
         }
 
         return cloned;
+    }
+
+    std::string debug_self() const override
+    {
+        std::stringstream ss;
+        ss << " size = " << this->children().size() << " [" + this->readable_detail_type();
+        if (!this->bases.empty()) {
+            ss << ":";
+            for (auto iter = this->bases.begin(); iter != this->bases.end(); iter++) {
+                ss << (iter == this->bases.begin() ? "" : ",") << Parameter::readable_detail_type(*iter);
+            }
+        }
+        ss << "]";
+
+        if (!this->comment.empty()) {
+            ss << " #" << this->comment;
+        }
+        return ss.str();
     }
 
     using BaseClasses = std::unordered_set<ParameterDetailType, ParameterDetailTypeHash, ParameterDetailTypeEqual>;

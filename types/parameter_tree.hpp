@@ -79,6 +79,7 @@ public:
      * 设置参数,对std::string类型的特化
      */
     void set(const std::string& index, const std::string& value);
+    void set(const std::string& index, const char* value);
 
     /**
      * 获取参数内部存储结构(具体类型),参数不合法或不存在时抛出异常
@@ -259,7 +260,7 @@ template <typename T>
 template <typename V>
 V ParameterTree<T>::get(const std::string& index)
 {
-    static_assert(is_basic<V>::value, "get<>() only support basic type");
+    static_assert(is_basic<V>::value || is_enum<V>::value, "set<>() only support basic/enum type");
     return static_cast<V>(parameter<V>(index)->value);
 }
 
@@ -267,14 +268,22 @@ template <typename T>
 template <typename V>
 void ParameterTree<T>::set(const std::string& index, const V& value)
 {
-    static_assert(is_basic<V>::value, "set<>() only support basic type");
+    static_assert(is_basic<V>::value || is_enum<V>::value, "set<>() only support basic/enum type");
     const_cast<V&>(parameter<V>(index)->value) = value;
+    commit_model_changes();
 }
 
 template <typename T>
 void ParameterTree<T>::set(const std::string& index, const std::string& value)
 {
     parameter(index)->from_string(value);
+    commit_model_changes();
+}
+
+template <typename T>
+void ParameterTree<T>::set(const std::string& index, const char* value)
+{
+    set(index, std::string(value));
 }
 
 template <typename T>

@@ -272,7 +272,7 @@ public:
     /// @brief 每次调用都创建一个新的实例
     /// @param root 实例名称
     /// @return 返回新创建的实例
-    static std::shared_ptr<ExtendedParameterTree> create(const std::string& root = "root")
+    static std::shared_ptr<ExtendedParameterTree> create_instance(const std::string& root = "root")
     {
         return std::shared_ptr<ExtendedParameterTree>(new ExtendedParameterTree(root));
     }
@@ -280,7 +280,7 @@ public:
     /// @brief 创建或返回已建实例(以实例名称作为索引)
     /// @param root 实例名称
     /// @return 返回新建或已建实例
-    static std::shared_ptr<ExtendedParameterTree> instance(const std::string& root)
+    static std::shared_ptr<ExtendedParameterTree> get_or_create_instance(const std::string& root)
     {
         static std::mutex lock;
         static std::unordered_map<std::string, std::shared_ptr<ExtendedParameterTree>> instances;
@@ -290,7 +290,7 @@ public:
             if (iter != instances.end()) {
                 return iter->second;
             }
-            return instances[root] = create(root);
+            return instances[root] = create_instance(root);
         }
     }
 
@@ -384,13 +384,13 @@ using SerdesTree = ExtendedParameterTree<T, CommandLineAPI<T>
 template <typename T>
 std::shared_ptr<SerdesTree<T>> create(const std::string& root = "root")
 {
-    return SerdesTree<T>::create(root);
+    return SerdesTree<T>::create_instance(root);
 }
 
 template <typename T>
 std::shared_ptr<SerdesTree<T>> instance(const std::string& root)
 {
-    return SerdesTree<T>::instance(root);
+    return SerdesTree<T>::get_or_create_instance(root);
 }
 
 template <typename T>
