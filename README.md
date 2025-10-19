@@ -126,6 +126,7 @@ DEFINE_INHERIT(ExampleBase, ExampleDerive) // 注册继承关系
 DEFINE_PARAM(ExampleRoot, i, "整型值示例")
 DEFINE_PARAM(ExampleRoot, s, "字符串示例")
 DEFINE_PARAM(ExampleRoot, d, "浮点数示例")
+DEFINE_PARAM(ExampleRoot, buffer, "非可打印数据")
 DEFINE_PARAM(ExampleRoot, v, "std::vector示例")
 DEFINE_PARAM(ExampleRoot, m, "std::map示例")
 ```
@@ -133,10 +134,11 @@ DEFINE_PARAM(ExampleRoot, m, "std::map示例")
 # 示例输出
 ```
 ***************debug_string(sender)***************
-|root size = 5 [ExampleRoot]
+|root size = 6 [ExampleRoot]
 | |root.i = 5 [int] #整型值示例
 | |root.s = Hi [std::string] #字符串示例
 | |root.d = 3.140000 [double] #浮点数示例
+| |root.buffer = AAECAwQFBgc= [xvorin::serdes::buffer] #非可打印数据
 | |root.v size = 3 [std::string] #std::vector示例
 | | |root.v.0 = Hello [std::string]
 | | |root.v.1 = World [std::string]
@@ -153,6 +155,7 @@ DEFINE_PARAM(ExampleRoot, m, "std::map示例")
     "i": 64,
     "s": "Hi",
     "d": 456.0,
+    "buffer": "AAECAwQFBgc=",
     "v": [
         "Hello",
         "My",
@@ -176,6 +179,8 @@ i = 64
 s = "Hi"
 #浮点数示例
 d = 456.0
+#非可打印数据
+buffer = "AAECAwQFBgc="
 v = ["Hello", "My", "Serdes"]
 
 #std::map示例
@@ -197,6 +202,7 @@ e = "E_THR"
 i: 64
 s: Hi
 d: 456.0
+buffer: AAECAwQFBgc=
 v:
   - Hello
   - My
@@ -213,6 +219,7 @@ m:
 i: 64
 s: "Hi"
 d: 456
+buffer: "\000\001\002\003\004\005\006\007"
 v: "Hello"
 v: "My"
 v: "Serdes"
@@ -231,9 +238,9 @@ m {
 }
 
 ***************to_pbbin***************
-CEASAkhpGQAAAAAAgHxAIgVIZWxsbyICTXkiBlNlcmRlcyoJCgFCEgQIARABKgcKAUMSAhAC
+CEASAkhpGQAAAAAAgHxAIggAAQIDBAUGByoFSGVsbG8qAk15KgZTZXJkZXMyCQoBQhIECAEQATIHCgFDEgIQAg==
 ***************to_pbdbstr***************
-i: 64 s: "Hi" d: 456 v: "Hello" v: "My" v: "Serdes" m { key: "B" value { b: true e: E_TWO } } m { key: "C" value { e: E_THR } }
+i: 64 s: "Hi" d: 456 buffer: "\000\001\002\003\004\005\006\007" v: "Hello" v: "My" v: "Serdes" m { key: "B" value { b: true e: E_TWO } } m { key: "C" value { e: E_THR } }
 ***************to_pbdef***************
 syntax = "proto3";
 package serdes.example;
@@ -253,15 +260,17 @@ message ExampleRoot {
     int32 i = 1;
     string s = 2;
     double d = 3;
-    repeated string v = 4;
-    map<string, ExampleDerive> m = 5;
+    bytes buffer = 4;
+    repeated string v = 5;
+    map<string, ExampleDerive> m = 6;
 }
 
 ***************debug_string(receiver before modify)***************
-|receiver size = 5 [ExampleRoot]
+|receiver size = 6 [ExampleRoot]
 | |receiver.i = 64 [int] #整型值示例
 | |receiver.s = Hi [std::string] #字符串示例
 | |receiver.d = 456.000000 [double] #浮点数示例
+| |receiver.buffer = AAECAwQFBgc= [xvorin::serdes::buffer] #非可打印数据
 | |receiver.v size = 3 [std::string] #std::vector示例
 | | |receiver.v.0 = Hello [std::string]
 | | |receiver.v.1 = My [std::string]
@@ -273,12 +282,12 @@ message ExampleRoot {
 | | |receiver.m.C size = 2 [ExampleDerive:ExampleBase]
 | | | |receiver.m.C.b = false [bool] #bool示例
 | | | |receiver.m.C.e = E_THR(2) [ExampleForEnum(E_ONE,E_TWO,E_THR)] #enum示例
-enum from string E_THR 2
 ***************debug_string(receiver after modify)***************
-|receiver size = 5 [ExampleRoot]
+|receiver size = 6 [ExampleRoot]
 | |receiver.i = 64 [int] #整型值示例
 | |receiver.s = Hi [std::string] #字符串示例
 | |receiver.d = 456.000000 [double] #浮点数示例
+| |receiver.buffer = AAECAwQFBgc= [xvorin::serdes::buffer] #非可打印数据
 | |receiver.v size = 2 [std::string] #std::vector示例
 | | |receiver.v.0 = My [std::string]
 | | |receiver.v.1 = Serdes [std::string]

@@ -119,5 +119,6 @@ DEFINE_INHERIT(ExampleBase, ExampleDerive) // 注册继承关系
 DEFINE_PARAM(ExampleRoot, i, "整型值示例")
 DEFINE_PARAM(ExampleRoot, s, "字符串示例")
 DEFINE_PARAM(ExampleRoot, d, "浮点数示例")
+DEFINE_PARAM(ExampleRoot, buffer, "非可打印数据")
 DEFINE_PARAM(ExampleRoot, v, "std::vector示例")
 DEFINE_PARAM(ExampleRoot, m, "std::map示例")
