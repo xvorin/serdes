@@ -8,8 +8,8 @@ void for_json(int argc, char** argv)
     ep1->parse_command_line(argc, argv);
     {
         std::unique_lock<std::mutex> guard;
-        auto& value = ep1->mutable_value(guard);
-        value.init_v3();
+        auto value = ep1->mutable_value(guard);
+        value->init_v3();
     }
     ep1->save();
 
@@ -26,8 +26,8 @@ void for_yaml(int argc, char** argv)
     ep1->parse_command_line(argc, argv);
     {
         std::unique_lock<std::mutex> guard;
-        auto& value = ep1->mutable_value(guard);
-        value.init_v3();
+        auto value = ep1->mutable_value(guard);
+        value->init_v3();
     }
     ep1->save();
 
@@ -44,8 +44,8 @@ void for_toml(int argc, char** argv)
     ep1->parse_command_line(argc, argv);
     {
         std::unique_lock<std::mutex> guard;
-        auto& value = ep1->mutable_value(guard);
-        value.init_v3();
+        auto value = ep1->mutable_value(guard);
+        value->init_v3();
     }
     ep1->save();
 
@@ -66,8 +66,8 @@ void for_pbtxt(int argc, char** argv)
     ep1->parse_command_line(argc, argv);
     {
         std::unique_lock<std::mutex> guard;
-        auto& value = ep1->mutable_value(guard);
-        value.init_v3();
+        auto value = ep1->mutable_value(guard);
+        value->init_v3();
     }
     ep1->save();
 

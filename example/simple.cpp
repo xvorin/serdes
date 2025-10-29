@@ -52,11 +52,11 @@ int main(int argc, char** argv)
     // 支持通过结构体直接修改数据
     {
         std::unique_lock<std::mutex> lock;
-        auto& value = sender->mutable_value(lock);
-        value.i = 64;
-        value.d = 456;
-        value.v = { "Hello", "My", "Serdes" };
-        value.m = { { "B", { true, E_TWO } }, { "C", { false, E_THR } } };
+        auto value = sender->mutable_value(lock);
+        value->i = 64;
+        value->d = 456;
+        value->v = { "Hello", "My", "Serdes" };
+        value->m = { { "B", { true, E_TWO } }, { "C", { false, E_THR } } };
     }
 
     // 支持通过结构体直接读取数据

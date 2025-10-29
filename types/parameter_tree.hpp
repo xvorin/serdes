@@ -48,7 +48,12 @@ public:
     /**
      * 获取可修改的参数结构体，为避免参数修改与外部读取冲突，需使用 std::unique_lock<std::mutex> 锁进行访问
      */
-    T& mutable_value(std::unique_lock<std::mutex>& holder);
+    T* mutable_value(std::unique_lock<std::mutex>& holder);
+
+    /**
+     * 非线程安全接口, 不可与create/remove/get/set等接口并行调用
+     */
+    T* unsafe_value();
 
     /**
      * 创建参数
@@ -203,11 +208,17 @@ T ParameterTree<T>::value()
 }
 
 template <typename T>
-T& ParameterTree<T>::mutable_value(std::unique_lock<std::mutex>& holder)
+T* ParameterTree<T>::mutable_value(std::unique_lock<std::mutex>& holder)
 {
     std::unique_lock<std::mutex> guard(lock_);
     holder.swap(guard);
-    return value_;
+    return &value_;
+}
+
+template <typename T>
+T* ParameterTree<T>::unsafe_value()
+{
+    return &value_;
 }
 
 template <typename T>
