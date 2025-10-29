@@ -167,7 +167,9 @@ public:
      */
     static std::string readable_detail_type(const ParameterDetailType& type)
     {
-        const auto raw = std::string(abi::__cxa_demangle(type.get().name(), 0, 0, 0));
+        auto demangled_name = abi::__cxa_demangle(type.get().name(), 0, 0, 0);
+        const auto raw = std::string(demangled_name);
+        std::free(demangled_name);
 
         auto remove_angle_brackets = [](std::string raw, const std::string& key) -> std::string {
             auto begin = raw.find(key);

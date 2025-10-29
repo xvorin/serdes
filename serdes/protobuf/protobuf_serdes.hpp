@@ -22,13 +22,13 @@ public:
     // 实现Open方法，返回内存中的数据流
     virtual google::protobuf::io::ZeroCopyInputStream* Open(const std::string& filename) override
     {
-        auto it = files_.find(filename);
-        if (it == files_.end()) {
+        auto iter = files_.find(filename);
+        if (iter == files_.end()) {
             last_error_ = "File not found: " + filename;
             return nullptr;
         }
         // 使用ArrayInputStream包装字符串内容
-        return new google::protobuf::io::ArrayInputStream(it->second.data(), it->second.size());
+        return new google::protobuf::io::ArrayInputStream(iter->second.data(), iter->second.size());
     }
 
     // 错误处理
@@ -100,22 +100,66 @@ private:
     std::string field_name_; // value_name_ : type_name_在参数树特定位置处的变量名, 用于子节点进行FindFieldByName操作
 };
 
-class ProtobufSerdesContext {
+class ProtobufMessageFactory {
 public:
-    ProtobufSerdesContext(const std::string& pbdef)
+    ProtobufMessageFactory(std::string package, const std::string& pbdef)
     {
+        package_.swap((package.empty() ? package : package.append(".")));
         load_proto_schema(pbdef, &descriptor_pool_); // 创建动态池和工厂
     }
 
     const google::protobuf::Descriptor* get_descriptor(const std::string& type_name)
     {
-        return descriptor_pool_.FindMessageTypeByName(type_name);
+        return descriptor_pool_.FindMessageTypeByName(package_ + type_name);
     }
 
     google::protobuf::Message* create_message(const std::string& type_name)
     {
         auto desc = get_descriptor(type_name);
         return dynamic_factory_.GetPrototype(desc)->New();
+    }
+
+private:
+    // 创建类型系统
+    bool load_proto_schema(const std::string& pbdef, google::protobuf::DescriptorPool* pool)
+    {
+        InMemorySourceTree source_tree;
+        source_tree.AddFile("dynamic.proto", pbdef); // 添加proto内容到内存，文件名需与import语句匹配
+
+        // 创建Importer，使用自定义的SourceTree
+        google::protobuf::compiler::Importer importer(&source_tree, nullptr);
+        auto file = importer.Import("dynamic.proto");
+        if (!file) {
+            return false;
+        }
+
+        // 将描述符复制到目标池
+        google::protobuf::FileDescriptorProto fproto;
+        file->CopyTo(&fproto);
+        return pool->BuildFile(fproto);
+    }
+
+private:
+    std::string package_;
+    google::protobuf::DescriptorPool descriptor_pool_;
+    google::protobuf::DynamicMessageFactory dynamic_factory_ { &descriptor_pool_ };
+};
+
+class ProtobufSerdesContext {
+public:
+    ProtobufSerdesContext(std::shared_ptr<ProtobufMessageFactory> factory)
+        : factory_(factory)
+    {
+    }
+
+    const google::protobuf::Descriptor* get_descriptor(const std::string& type_name)
+    {
+        return factory_->get_descriptor(type_name);
+    }
+
+    google::protobuf::Message* create_message(const std::string& type_name)
+    {
+        return factory_->create_message(type_name);
     }
 
     ProtobufMessage mutable_message(ProtobufMessage* parent, const std::string& field_name)
@@ -188,7 +232,7 @@ public:
     bool from_txt_string(const std::string& type_name, const std::string& pbtxt)
     {
         set_root(create_message(type_name));
-        return root_ && google::protobuf::TextFormat::ParseFromString(pbtxt, root_);
+        return root_ && google::protobuf::TextFormat::ParseFromString(pbtxt, root());
     }
 
     ProtobufMessage* parent_message()
@@ -198,42 +242,20 @@ public:
 
     google::protobuf::Message* root()
     {
-        return root_;
+        return root_.get();
     }
 
     void set_root(google::protobuf::Message* root)
     {
-        assert(!root_);
-        root_ = root;
+        root_.reset(root); // unique_ptr接管所有权
     }
 
 private:
-    // 创建类型系统
-    bool load_proto_schema(const std::string& pbdef, google::protobuf::DescriptorPool* pool)
-    {
-        InMemorySourceTree source_tree;
-        source_tree.AddFile("dynamic.proto", pbdef); // 添加proto内容到内存，文件名需与import语句匹配
-
-        // 创建Importer，使用自定义的SourceTree
-        google::protobuf::compiler::Importer importer(&source_tree, nullptr);
-        auto file = importer.Import("dynamic.proto");
-        if (!file) {
-            return false;
-        }
-
-        // 将描述符复制到目标池
-        google::protobuf::FileDescriptorProto fproto;
-        file->CopyTo(&fproto);
-        return pool->BuildFile(fproto);
-    }
-
-public:
+    std::shared_ptr<ProtobufMessageFactory> factory_;
+    std::unique_ptr<google::protobuf::Message> root_;
     std::stack<ProtobufMessage> msgs;
 
-private:
-    google::protobuf::DescriptorPool descriptor_pool_;
-    google::protobuf::DynamicMessageFactory dynamic_factory_ { &descriptor_pool_ };
-    google::protobuf::Message* root_ = nullptr;
+    friend struct EnterProtobufMessageGuard;
 };
 
 struct EnterProtobufMessageGuard {

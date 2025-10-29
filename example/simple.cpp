@@ -81,7 +81,8 @@ int main(int argc, char** argv)
     // 生成Protobuf DebugString
     show("to_pbdbstr", receiver->to_pbdbstr(true));
     // 生成proto文件
-    show("to_pbdef", receiver->to_pbdef("serdes.example"));
+    receiver->set_package("serdes.example"); // 设置命名空间(可选)
+    show("to_pbdef", receiver->to_pbdef());
 #endif
 
     show("debug_string(receiver before modify)", receiver->debug_string());

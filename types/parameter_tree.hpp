@@ -13,7 +13,7 @@ namespace xvorin::serdes {
 template <typename T>
 class ParameterTree {
 public:
-    ParameterTree(const std::string& root);
+    explicit ParameterTree(const std::string& root);
 
     /**
      * 获取数据模型

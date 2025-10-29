@@ -10,7 +10,12 @@ public:
     explicit ProtobufAPI(ParameterTree<T>& tree)
         : tree_(tree)
     {
+        pbdef_ = to_pbdef(tree_.root());
+        factory_ = std::make_shared<detail::ProtobufMessageFactory>(package_, pbdef_);
     }
+
+    void set_package(std::string package);
+    const std::string& package();
 
     void from_pbbin(const std::string& s);
     void from_pbbin(const std::string& index, const std::string& s);
@@ -24,15 +29,34 @@ public:
     std::string to_pbtxt();
     std::string to_pbtxt(const std::string& index);
 
-    std::string to_pbdef(const std::string& package = "");
-    std::string to_pbdef_internal(const std::string& index, const std::string& package = "");
+    std::string to_pbdef();
+    std::string to_pbdef(const std::string& index);
 
     std::string to_pbdbstr(bool simplified = false);
     std::string to_pbdbstr(const std::string& index, bool simplified = false);
 
 private:
     ParameterTree<T>& tree_;
+    std::string package_;
+    std::string pbdef_;
+    std::shared_ptr<detail::ProtobufMessageFactory> factory_;
 };
+
+template <typename T>
+void ProtobufAPI<T>::set_package(std::string package)
+{
+    if (package_ != package) {
+        package_.swap(package);
+        pbdef_ = to_pbdef(tree_.root());
+        factory_ = std::make_shared<detail::ProtobufMessageFactory>(package_, pbdef_);
+    }
+}
+
+template <typename T>
+const std::string& ProtobufAPI<T>::package()
+{
+    return package_;
+}
 
 template <typename T>
 void ProtobufAPI<T>::from_pbbin(const std::string& s)
@@ -43,10 +67,9 @@ void ProtobufAPI<T>::from_pbbin(const std::string& s)
 template <typename T>
 void ProtobufAPI<T>::from_pbbin(const std::string& index, const std::string& s)
 {
-    auto pbdef = to_pbdef_internal(index);
     auto p = tree_.parameter(index);
 
-    detail::ProtobufSerdesContext pbbin_in(pbdef);
+    detail::ProtobufSerdesContext pbbin_in(factory_);
     pbbin_in.from_binary_string(detail::generate_pbtype_name(p->readable_detail_type()), s);
 
     tree_.deserialize(p, &pbbin_in, ParameterSerdesType::PST_PBFMT);
@@ -62,10 +85,9 @@ void ProtobufAPI<T>::from_pbtxt(const std::string& s)
 template <typename T>
 void ProtobufAPI<T>::from_pbtxt(const std::string& index, const std::string& s)
 {
-    auto pbdef = to_pbdef_internal(index);
     auto p = tree_.parameter(index);
 
-    detail::ProtobufSerdesContext pbtxt_in(pbdef);
+    detail::ProtobufSerdesContext pbtxt_in(factory_);
     pbtxt_in.from_txt_string(detail::generate_pbtype_name(p->readable_detail_type()), s);
 
     tree_.deserialize(p, &pbtxt_in, ParameterSerdesType::PST_PBFMT);
@@ -81,9 +103,9 @@ std::string ProtobufAPI<T>::to_pbbin()
 template <typename T>
 std::string ProtobufAPI<T>::to_pbbin(const std::string& index)
 {
-    auto pbdef = to_pbdef_internal(index);
+    tree_.commit_value_changes();
 
-    detail::ProtobufSerdesContext pbbin_out(pbdef);
+    detail::ProtobufSerdesContext pbbin_out(factory_);
     tree_.serialize(tree_.parameter(index), &pbbin_out, ParameterSerdesType::PST_PBFMT);
 
     return pbbin_out.to_binary_string();
@@ -98,29 +120,29 @@ std::string ProtobufAPI<T>::to_pbtxt()
 template <typename T>
 std::string ProtobufAPI<T>::to_pbtxt(const std::string& index)
 {
-    auto pbdef = to_pbdef_internal(index);
+    tree_.commit_value_changes();
 
-    detail::ProtobufSerdesContext pbtxt_out(pbdef);
+    detail::ProtobufSerdesContext pbtxt_out(factory_);
     tree_.serialize(tree_.parameter(index), &pbtxt_out, ParameterSerdesType::PST_PBFMT);
 
     return pbtxt_out.to_txt_string();
 }
 
 template <typename T>
-std::string ProtobufAPI<T>::to_pbdef(const std::string& package)
+std::string ProtobufAPI<T>::to_pbdef()
 {
-    return to_pbdef_internal(tree_.root(), package);
+    return pbdef_;
 }
 
 template <typename T>
-std::string ProtobufAPI<T>::to_pbdef_internal(const std::string& index, const std::string& package)
+std::string ProtobufAPI<T>::to_pbdef(const std::string& index)
 {
     tree_.commit_value_changes();
 
     detail::ProtobufDefineSerdesContext out;
     tree_.serialize(tree_.parameter(index), &out, ParameterSerdesType::PST_PBDEF);
 
-    return out.to_string(package);
+    return out.to_string(package_);
 }
 
 template <typename T>
@@ -132,9 +154,9 @@ std::string ProtobufAPI<T>::to_pbdbstr(bool simplified)
 template <typename T>
 std::string ProtobufAPI<T>::to_pbdbstr(const std::string& index, bool simplified)
 {
-    auto pbdef = to_pbdef_internal(index);
+    tree_.commit_value_changes();
 
-    detail::ProtobufSerdesContext pbdbstr_out(pbdef);
+    detail::ProtobufSerdesContext pbdbstr_out(factory_);
     tree_.serialize(tree_.parameter(index), &pbdbstr_out, ParameterSerdesType::PST_PBFMT);
 
     return pbdbstr_out.to_debug_string(simplified);

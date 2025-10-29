@@ -76,6 +76,29 @@ void for_pbtxt(int argc, char** argv)
     ep2->from_pbtxt(ep1->to_pbtxt());
     ep2->save();
 }
+
+#include <sys/time.h>
+void for_pbbin(size_t sz)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    int64_t t1 = tv.tv_sec * 1000000 + tv.tv_usec;
+
+    auto ep1 = xvorin::serdes::create<ExampleParameter>();
+    ep1->unsafe_value()->init_v3();
+    for (size_t i = 0; i < sz; i++) {
+        // ep1->set_package(std::string("pkg") + std::to_string(i));
+        // ep1->to_json();
+        // ep1->to_yaml();
+        // ep1->to_toml();
+        ep1->to_pbbin();
+    }
+
+    gettimeofday(&tv, NULL);
+    int64_t t2 = tv.tv_sec * 1000000 + tv.tv_usec;
+    std::cout << "average time cost:" << static_cast<double>(t2 - t1) / sz << "us" << std::endl;
+}
+
 #endif
 
 int main(int argc, char** argv)
@@ -85,6 +108,7 @@ int main(int argc, char** argv)
     for_toml(argc, argv);
 #if ENABLE_PROTOBUF
     for_pbtxt(argc, argv);
+    for_pbbin(10000);
 #endif
 
     return 0;
