@@ -59,11 +59,11 @@ int main(int argc, char** argv)
     // 支持通过结构体直接修改数据
     {
         std::unique_lock<std::mutex> lock;
-        auto& value = sender->mutable_value(lock);
-        value.i = 64;
-        value.d = 456;
-        value.v = { "Hello", "My", "Serdes" };
-        value.m = { { "B", { true, E_TWO } }, { "C", { false, E_THR } } };
+        auto value = sender->mutable_value(lock);
+        value->i = 64;
+        value->d = 456;
+        value->v = { "Hello", "My", "Serdes" };
+        value->m = { { "B", { true, E_TWO } }, { "C", { false, E_THR } } };
     }
 
     // 支持通过结构体直接读取数据
@@ -88,7 +88,8 @@ int main(int argc, char** argv)
     // 生成Protobuf DebugString
     show("to_pbdbstr", receiver->to_pbdbstr(true));
     // 生成proto文件
-    show("to_pbdef", receiver->to_pbdef("serdes.example"));
+    receiver->set_package("serdes.example"); // 设置命名空间(可选)
+    show("to_pbdef", receiver->to_pbdef());
 #endif
 
     show("debug_string(receiver before modify)", receiver->debug_string());
