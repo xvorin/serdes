@@ -33,13 +33,38 @@ struct TraitedParameter<T, typename std::enable_if<is_object<T>::value>::type> :
         for (auto& base : this->bases) {
             auto base_parameter = ParameterPrototype::create_parameter(base, "temporary");
             for (const auto& child : base_parameter->children()) {
-                auto cloned_child = child.second->clone(child.second->subkey, child.second->offset);
-                cloned_child->parent = cloned;
-                cloned->mutable_children()->emplace(child.first, cloned_child);
+                child.second->parent = cloned;
+                cloned->mutable_children()->emplace(child.first, child.second);
             }
         }
 
         return cloned;
+    }
+
+    virtual void create_child(const std::string& newkey) override
+    {
+        auto children = this->mutable_children();
+        if (children->find(newkey) != children->end()) {
+            throw IndexDuplicate(this->index() + "." + newkey);
+        }
+
+        auto self = ParameterPrototype::create_parameter(this->detail, this->subkey);
+        auto child = self->find_child(newkey);
+        if (nullptr == child) {
+            throw ParameterNotFound(newkey + "@" + this->index());
+        }
+
+        children->emplace(newkey, child);
+        child->parent = this->shared_from_this();
+    }
+
+    virtual void remove_child(const std::string& subkey) override
+    {
+        auto iter = this->children().find(subkey);
+        if (iter == this->children().end()) {
+            throw ParameterNotFound(this->index() + "." + subkey);
+        }
+        this->mutable_children()->erase(iter);
     }
 
     std::string debug_self() const override
