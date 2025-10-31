@@ -139,8 +139,7 @@ class YamlSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : publ
         size_t counter = 0;
         for (const auto& ychild : yin) {
             const auto subkey = std::to_string(counter++);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
             child->deserialize(&ychild);
             children->emplace(subkey, child);
         }
@@ -176,8 +175,7 @@ class YamlSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
         for (const auto& ypair : yin.map_items()) {
             const auto& subkey = ypair.key().as_str();
             const auto& ychild = ypair.value();
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
             child->deserialize(&ychild);
             children->emplace(subkey, child);
         }
@@ -214,8 +212,7 @@ class YamlSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Se
         size_t counter = 0;
         for (const auto& ychild : yin) {
             const auto subkey = std::to_string(counter++);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
             child->deserialize(&ychild);
             children->emplace(subkey, child);
         }
@@ -245,8 +242,7 @@ private:
         auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
 
         if (!yin.is_null()) {
-            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0");
-            parameter->value->parent = parameter;
+            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0", parameter);
             parameter->value->deserialize(in);
         }
     }

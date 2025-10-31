@@ -31,8 +31,8 @@ struct TraitedParameter<T, typename std::enable_if<is_object<T>::value>::type> :
 
         // 添加基类的成员
         for (auto& base : this->bases) {
-            auto base_parameter = ParameterPrototype::create_parameter(base, "temporary");
-            for (const auto& child : base_parameter->children()) {
+            auto temp = ParameterPrototype::create_parameter(base);
+            for (const auto& child : temp->children()) {
                 child.second->parent = cloned;
                 cloned->mutable_children()->emplace(child.first, child.second);
             }
@@ -48,8 +48,8 @@ struct TraitedParameter<T, typename std::enable_if<is_object<T>::value>::type> :
             throw IndexDuplicate(this->index() + "." + newkey);
         }
 
-        auto self = ParameterPrototype::create_parameter(this->detail, this->subkey);
-        auto child = self->find_child(newkey);
+        auto temp = ParameterPrototype::create_parameter(this->detail);
+        auto child = temp->find_child(newkey);
         if (nullptr == child) {
             throw ParameterNotFound(newkey + "@" + this->index());
         }

@@ -45,8 +45,7 @@ struct TraitedParameter<T, typename std::enable_if<is_smart_ptr<T>::value>::type
             throw IndexDuplicate(this->index() + "." + newkey);
         }
 
-        value = ParameterPrototype::create_parameter(this->detail, "0");
-        value->parent = this->shared_from_this();
+        value = ParameterPrototype::create_parameter(this->detail, "0", this->shared_from_this());
     }
 
     virtual void remove_child(const std::string& subkey) override

@@ -201,8 +201,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_sequence<T>::value || i
         // 以下都是复杂类型, 需要插入中间消息, 保证它们的子节点: 1.不再继续存在于当前message内, 2.但同时需要另行建立一个message
         //    对于子类型为 结构体的 另行建立的message为结构体名称,字段不需要在下层中做向上挂接的动作，但是需要通过触发下层记录结构体自身的完整消息内容
         //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
-        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
-        child->parent = std::const_pointer_cast<Parameter>(p);
+        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name, std::const_pointer_cast<Parameter>(p));
         {
             const bool anonymous = (is_object<typename T::value_type>::value || is_enum<typename T::value_type>::value);
             const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
@@ -241,8 +240,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
         // 以下都是复杂类型, 需要插入中间消息, 保证它们的子节点: 1.不再继续存在于当前message内, 2.但同时需要另行建立一个message
         //    对于子类型为 结构体的 另行建立的message为结构体名称,字段不需要在下层中做向上挂接的动作，但是需要通过触发下层记录结构体自身的完整消息内容
         //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
-        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
-        child->parent = std::const_pointer_cast<Parameter>(p);
+        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name, std::const_pointer_cast<Parameter>(p));
         {
             const bool anonymous = (is_object<typename T::mapped_type>::value || is_enum<typename T::mapped_type>::value);
             const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
@@ -281,8 +279,7 @@ private:
         // 以下都是复杂类型, 需要插入中间消息, 保证它们的子节点: 1.不再继续存在于当前message内, 2.但同时需要另行建立一个message
         //    对于子类型为 结构体的 另行建立的message为结构体名称,字段不需要在下层中做向上挂接的动作，但是需要通过触发下层记录结构体自身的完整消息内容
         //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
-        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name);
-        child->parent = std::const_pointer_cast<Parameter>(p);
+        auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name, std::const_pointer_cast<Parameter>(p));
         {
             const bool anonymous = (is_object<typename T::element_type>::value || is_enum<typename T::element_type>::value);
             const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;

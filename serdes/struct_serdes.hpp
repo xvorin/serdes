@@ -196,8 +196,7 @@ class StructSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : pu
         size_t counter = 0;
         for (const auto& schild : sin) {
             const auto subkey = std::to_string(counter++);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
             child->deserialize(&schild);
             children->emplace(subkey, child);
         }
@@ -250,8 +249,7 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
 
         for (const auto& spair : sin) {
             const std::string subkey = Converter<typename T::key_type>::to_string(spair.first);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
             child->deserialize(&spair.second);
             children->emplace(subkey, child);
         }
@@ -302,8 +300,7 @@ class StructSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public 
         size_t counter = 0;
         for (const auto& schild : sin) {
             const std::string subkey = std::to_string(counter++);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
             child->deserialize(&schild);
             children->emplace(subkey, child);
         }
@@ -346,8 +343,7 @@ private:
         }
 
         if (parameter->value == nullptr) {
-            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0");
-            parameter->value->parent = parameter;
+            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0", parameter);
         }
 
         parameter->value->deserialize(sin.get());

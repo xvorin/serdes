@@ -529,8 +529,7 @@ class ProtobufSerdes<T, typename std::enable_if<is_sequence<T>::value || is_set<
             // 处理下一级
             const auto subkey = std::to_string(i);
             detail::EnterProtobufMessageGuard guard(ctx, current);
-            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-            child->parent = parameter;
+            auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
             child->deserialize(in);
             parameter->mutable_children()->emplace(subkey, child);
         }
@@ -637,8 +636,7 @@ class ProtobufSerdes<T, typename std::enable_if<is_map<T>::value>::type> : publi
 
                 // 处理下一级
                 detail::EnterProtobufMessageGuard guard(ctx, current);
-                auto child = ParameterPrototype::create_parameter(parameter->detail, subkey);
-                child->parent = parameter;
+                auto child = ParameterPrototype::create_parameter(parameter->detail, subkey, parameter);
                 child->deserialize(in);
                 parameter->mutable_children()->emplace(subkey, child);
             }
@@ -694,8 +692,7 @@ private:
         }
 
         if (!parameter->value) {
-            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0");
-            parameter->value->parent = parameter;
+            parameter->value = ParameterPrototype::create_parameter(parameter->detail, "0", parameter);
         }
 
         detail::ProtobufMessage current;

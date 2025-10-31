@@ -7,7 +7,19 @@ namespace xvorin::serdes {
 
 struct ParameterPrototype {
 public:
-    static std::shared_ptr<Parameter> create_parameter(const ParameterDetailType& type, const std::string& newkey, size_t offset = 0)
+    static std::shared_ptr<Parameter> create_parameter(const ParameterDetailType& type)
+    {
+        return create_parameter(type, "need_children_under_this", nullptr, 0);
+    }
+
+    static std::shared_ptr<Parameter> create_parameter(const ParameterDetailType& type, const std::string& newkey,
+        std::shared_ptr<Parameter> parent)
+    {
+        return create_parameter(type, newkey, parent, 0);
+    }
+
+    static std::shared_ptr<Parameter> create_parameter(const ParameterDetailType& type, const std::string& newkey,
+        std::shared_ptr<Parameter> parent, size_t offset)
     {
         auto proto = ParameterPrototype::query_prototype(type);
         if (!proto) {
@@ -15,6 +27,7 @@ public:
         }
 
         std::shared_ptr<Parameter> created = proto->clone(newkey, offset);
+        created->parent = parent;
 
         if (created->type != ParameterType::PT_OBJECT) {
             return created;
@@ -28,10 +41,9 @@ public:
                 continue;
             }
 
-            auto nchild = ParameterPrototype::create_parameter(ochild->detail, ochild->subkey, ochild->offset);
+            auto nchild = ParameterPrototype::create_parameter(ochild->detail, ochild->subkey, created, ochild->offset);
             const_cast<std::string&>(nchild->comment) = (nchild->comment.size() > ochild->comment.size()) ? nchild->comment : ochild->comment;
             const_cast<std::string&>(nchild->verinfo) = (nchild->verinfo.size() > ochild->verinfo.size()) ? nchild->verinfo : ochild->verinfo;
-            nchild->parent = created;
 
             ochild.swap(nchild);
         }

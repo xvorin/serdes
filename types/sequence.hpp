@@ -24,8 +24,7 @@ struct TraitedParameter<T, typename std::enable_if<is_sequence<T>::value>::type>
         for (auto& child : this->sorted_children()) {
             auto subkey = std::to_string(counter++);
             if (subkey == newkey) {
-                children[subkey] = ParameterPrototype::create_parameter(this->detail, subkey);
-                children[subkey]->parent = this->shared_from_this();
+                children[subkey] = ParameterPrototype::create_parameter(this->detail, subkey, this->shared_from_this());
                 subkey = std::to_string(counter++);
             }
             children[subkey] = child;
@@ -34,8 +33,7 @@ struct TraitedParameter<T, typename std::enable_if<is_sequence<T>::value>::type>
 
         if (counter == this->children().size()) {
             const auto subkey = std::to_string(counter++);
-            children[subkey] = ParameterPrototype::create_parameter(this->detail, subkey);
-            children[subkey]->parent = this->shared_from_this();
+            children[subkey] = ParameterPrototype::create_parameter(this->detail, subkey, this->shared_from_this());
         }
 
         this->mutable_children()->swap(children);

@@ -25,8 +25,7 @@ struct TraitedParameter<T, typename std::enable_if<is_map<T>::value>::type> : pu
             throw IndexDuplicate(this->index() + "." + newkey);
         }
 
-        auto child = ParameterPrototype::create_parameter(this->detail, newkey);
-        child->parent = this->shared_from_this();
+        auto child = ParameterPrototype::create_parameter(this->detail, newkey, this->shared_from_this());
         this->mutable_children()->emplace(newkey, child);
     }
 
