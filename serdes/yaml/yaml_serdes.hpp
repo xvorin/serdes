@@ -17,7 +17,7 @@ class YamlSerdes : public Serdes {
 
 // BASIC
 template <typename T>
-class YamlSerdes<T, typename std::enable_if<is_basic<T>::value && !std::is_same<T, buffer>::value>::type> : public Serdes {
+class YamlSerdes<T, typename std::enable_if<is_basic<T>::value && !is_extension_basic<T>::value>::type> : public Serdes {
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
@@ -50,7 +50,27 @@ class YamlSerdes<T, typename std::enable_if<std::is_same<T, buffer>::value>::typ
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
         if (!yin.is_null()) {
-            parameter->value = base64_decode(yin.get_value<T>());
+            parameter->value = base64_decode(yin.get_value<std::string>());
+        }
+    }
+};
+
+// BASIC-envar
+template <typename T>
+class YamlSerdes<T, typename std::enable_if<std::is_same<T, envar>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& yout = (*static_cast<fkyaml::ordered_node*>(out));
+        yout = parameter->value.original();
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& yin = (*static_cast<const fkyaml::ordered_node*>(in));
+        if (!yin.is_null()) {
+            parameter->value = yin.get_value<std::string>();
         }
     }
 };

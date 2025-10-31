@@ -171,4 +171,20 @@ private:
     std::string pattern_;
 };
 
+// envar
+template <typename T>
+struct Validator<T, typename std::enable_if<std::is_same<T, envar>::value>::type> {
+public:
+    bool operator()(const T& value) const
+    {
+        return true;
+    }
+
+    void parse_verification_info(const std::string& verinfo)
+    {
+    }
+
+private:
+};
+
 }

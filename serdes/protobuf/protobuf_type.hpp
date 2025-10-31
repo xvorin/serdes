@@ -54,7 +54,7 @@ struct Pbtraits<T, typename std::enable_if<std::is_same<T, uint64_t>::value>::ty
 };
 
 template <typename T>
-struct Pbtraits<T, typename std::enable_if<std::is_same<T, std::string>::value>::type> {
+struct Pbtraits<T, typename std::enable_if<std::is_same<T, std::string>::value || std::is_same<T, envar>::value>::type> {
     static std::string type() { return "string"; }
     static std::string value() { return std::string(); }
 };

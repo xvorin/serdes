@@ -31,6 +31,9 @@ struct ExampleRoot {
     // xvorin::serdes::buffer类型的数据, protobuf会设定为bytes类型，非protobuf序列化时会进行base64编码
     xvorin::serdes::buffer buffer = std::string("\0\1\2\3\4\5\6\7", 8);
 
+    // 支持读取环境变量
+    xvorin::serdes::envar envar = "${HOME}/sth";
+
     /// 支持STL(list/vector/map/unordered_map/set/unordered_set),支持STL的任意嵌套使用
     std::vector<std::string> v = { "Hello", "World", "!" };
     std::map<std::string, ExampleDerive> m = { { "A", { true, E_ONE } }, { "B", { false, E_TWO } } };
@@ -101,11 +104,12 @@ int main(int argc, char** argv)
     // 支持通过接口读取数据
     show("receiver.v.1", receiver->get<std::string>("receiver.v.1"));
 
-    // 通过命令行操作数据结构
-    receiver->parse_command_line(argc, argv);
-
     // 将内容保存到文件, 默认使用toml支持保存注释信息
     receiver->set_sink_file("./example.toml");
+    receiver->save();
+
+    // 通过命令行操作数据结构
+    receiver->parse_command_line(argc, argv);
 }
 
 // 以下通过非侵入方式 获取数据结构的信息
@@ -121,5 +125,6 @@ DEFINE_PARAM(ExampleRoot, i, "整型值示例")
 DEFINE_PARAM(ExampleRoot, s, "字符串示例")
 DEFINE_PARAM(ExampleRoot, d, "浮点数示例")
 DEFINE_PARAM(ExampleRoot, buffer, "非可打印数据")
+DEFINE_PARAM(ExampleRoot, envar, "环境变量")
 DEFINE_PARAM(ExampleRoot, v, "std::vector示例")
 DEFINE_PARAM(ExampleRoot, m, "std::map示例")

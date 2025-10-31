@@ -38,6 +38,9 @@ struct ExampleRoot {
     // xvorin::serdes::buffer类型的数据, protobuf会设定为bytes类型，非protobuf序列化时会进行base64编码
     xvorin::serdes::buffer buffer = std::string("\0\1\2\3\4\5\6\7", 8);
 
+    // 支持读取环境变量
+    xvorin::serdes::envar envar = "${HOME}/sth";
+
     /// 支持STL(list/vector/map/unordered_map/set/unordered_set),支持STL的任意嵌套使用
     std::vector<std::string> v = { "Hello", "World", "!" };
     std::map<std::string, ExampleDerive> m = { { "A", { true, E_ONE } }, { "B", { false, E_TWO } } };
@@ -108,11 +111,12 @@ int main(int argc, char** argv)
     // 支持通过接口读取数据
     show("receiver.v.1", receiver->get<std::string>("receiver.v.1"));
 
-    // 通过命令行操作数据结构
-    receiver->parse_command_line(argc, argv);
-
     // 将内容保存到文件, 默认使用toml支持保存注释信息
     receiver->set_sink_file("./example.toml");
+    receiver->save();
+
+    // 通过命令行操作数据结构
+    receiver->parse_command_line(argc, argv);
 }
 
 // 以下通过非侵入方式 获取数据结构的信息
@@ -128,6 +132,7 @@ DEFINE_PARAM(ExampleRoot, i, "整型值示例")
 DEFINE_PARAM(ExampleRoot, s, "字符串示例")
 DEFINE_PARAM(ExampleRoot, d, "浮点数示例")
 DEFINE_PARAM(ExampleRoot, buffer, "非可打印数据")
+DEFINE_PARAM(ExampleRoot, envar, "环境变量")
 DEFINE_PARAM(ExampleRoot, v, "std::vector示例")
 DEFINE_PARAM(ExampleRoot, m, "std::map示例")
 ```
@@ -135,11 +140,12 @@ DEFINE_PARAM(ExampleRoot, m, "std::map示例")
 # 示例输出
 ```
 ***************debug_string(sender)***************
-|root size = 6 [ExampleRoot]
+|root size = 7 [ExampleRoot]
 | |root.i = 5 [int] #整型值示例
 | |root.s = Hi [std::string] #字符串示例
 | |root.d = 3.140000 [double] #浮点数示例
 | |root.buffer = AAECAwQFBgc= [xvorin::serdes::buffer] #非可打印数据
+| |root.envar = /home/cwy/sth [xvorin::serdes::envar] #环境变量
 | |root.v size = 3 [std::string] #std::vector示例
 | | |root.v.0 = Hello [std::string]
 | | |root.v.1 = World [std::string]
@@ -157,6 +163,7 @@ DEFINE_PARAM(ExampleRoot, m, "std::map示例")
     "s": "Hi",
     "d": 456.0,
     "buffer": "AAECAwQFBgc=",
+    "envar": "${HOME}/sth",
     "v": [
         "Hello",
         "My",
@@ -182,6 +189,8 @@ s = "Hi"
 d = 456.0
 #非可打印数据
 buffer = "AAECAwQFBgc="
+#环境变量
+envar = "${HOME}/sth"
 v = ["Hello", "My", "Serdes"]
 
 #std::map示例
@@ -204,6 +213,7 @@ i: 64
 s: Hi
 d: 456.0
 buffer: AAECAwQFBgc=
+envar: ${HOME}/sth
 v:
   - Hello
   - My
@@ -221,6 +231,7 @@ i: 64
 s: "Hi"
 d: 456
 buffer: "\000\001\002\003\004\005\006\007"
+envar: "${HOME}/sth"
 v: "Hello"
 v: "My"
 v: "Serdes"
@@ -239,9 +250,9 @@ m {
 }
 
 ***************to_pbbin***************
-CEASAkhpGQAAAAAAgHxAIggAAQIDBAUGByoFSGVsbG8qAk15KgZTZXJkZXMyCQoBQhIECAEQATIHCgFDEgIQAg==
+CEASAkhpGQAAAAAAgHxAIggAAQIDBAUGByoLJHtIT01FfS9zdGgyBUhlbGxvMgJNeTIGU2VyZGVzOgkKAUISBAgBEAE6BwoBQxICEAI=
 ***************to_pbdbstr***************
-i: 64 s: "Hi" d: 456 buffer: "\000\001\002\003\004\005\006\007" v: "Hello" v: "My" v: "Serdes" m { key: "B" value { b: true e: E_TWO } } m { key: "C" value { e: E_THR } }
+i: 64 s: "Hi" d: 456 buffer: "\000\001\002\003\004\005\006\007" envar: "${HOME}/sth" v: "Hello" v: "My" v: "Serdes" m { key: "B" value { b: true e: E_TWO } } m { key: "C" value { e: E_THR } }
 ***************to_pbdef***************
 syntax = "proto3";
 package serdes.example;
@@ -262,16 +273,18 @@ message ExampleRoot {
     string s = 2;
     double d = 3;
     bytes buffer = 4;
-    repeated string v = 5;
-    map<string, ExampleDerive> m = 6;
+    string envar = 5;
+    repeated string v = 6;
+    map<string, ExampleDerive> m = 7;
 }
 
 ***************debug_string(receiver before modify)***************
-|receiver size = 6 [ExampleRoot]
+|receiver size = 7 [ExampleRoot]
 | |receiver.i = 64 [int] #整型值示例
 | |receiver.s = Hi [std::string] #字符串示例
 | |receiver.d = 456.000000 [double] #浮点数示例
 | |receiver.buffer = AAECAwQFBgc= [xvorin::serdes::buffer] #非可打印数据
+| |receiver.envar = /home/cwy/sth [xvorin::serdes::envar] #环境变量
 | |receiver.v size = 3 [std::string] #std::vector示例
 | | |receiver.v.0 = Hello [std::string]
 | | |receiver.v.1 = My [std::string]
@@ -284,11 +297,12 @@ message ExampleRoot {
 | | | |receiver.m.C.b = false [bool] #bool示例
 | | | |receiver.m.C.e = E_THR(2) [ExampleForEnum(E_ONE,E_TWO,E_THR)] #enum示例
 ***************debug_string(receiver after modify)***************
-|receiver size = 6 [ExampleRoot]
+|receiver size = 7 [ExampleRoot]
 | |receiver.i = 64 [int] #整型值示例
 | |receiver.s = Hi [std::string] #字符串示例
 | |receiver.d = 456.000000 [double] #浮点数示例
 | |receiver.buffer = AAECAwQFBgc= [xvorin::serdes::buffer] #非可打印数据
+| |receiver.envar = /home/cwy/sth [xvorin::serdes::envar] #环境变量
 | |receiver.v size = 2 [std::string] #std::vector示例
 | | |receiver.v.0 = My [std::string]
 | | |receiver.v.1 = Serdes [std::string]

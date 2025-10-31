@@ -70,6 +70,20 @@ struct Converter<T, typename std::enable_if<std::is_same<T, buffer>::value>::typ
     }
 };
 
+// envar
+template <typename T>
+struct Converter<T, typename std::enable_if<std::is_same<T, envar>::value>::type> {
+    static std::string to_string(T t)
+    {
+        return static_cast<std::string>(t);
+    }
+
+    static T from_string(const std::string& s)
+    {
+        return T(s);
+    }
+};
+
 // enum
 template <typename T>
 struct Converter<T, typename std::enable_if<std::is_enum<T>::value>::type> {

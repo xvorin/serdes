@@ -10,20 +10,17 @@
 
 #include <type_traits>
 
+#include "serdes/types/extension/buffer.hpp"
+#include "serdes/types/extension/envar.hpp"
+
 namespace xvorin::serdes {
 
-class buffer : public std::string {
-public:
-    using std::string::string;
-    buffer() = default;
-    buffer(const std::string& s)
-        : std::string(s)
-    {
-    }
+template <typename T>
+struct is_extension_basic : std::integral_constant<bool, std::is_same<T, buffer>::value || std::is_same<T, envar>::value> {
 };
 
 template <typename T>
-struct is_basic : std::integral_constant<bool, std::is_arithmetic<T>::value || std::is_same<T, std::string>::value || std::is_same<T, buffer>::value> {
+struct is_basic : std::integral_constant<bool, std::is_arithmetic<T>::value || std::is_same<T, std::string>::value || is_extension_basic<T>::value> {
 };
 
 template <typename T>
