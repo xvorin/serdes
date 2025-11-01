@@ -70,9 +70,10 @@ private:
         size_t substart = 0;
         for (auto iter = std::sregex_iterator(original.cbegin(), original.cend(), pattern);
             iter != std::sregex_iterator(); iter++) {
-            const char* value = std::getenv((*iter)[1].str().c_str());
+            const auto env = (*iter)[1].str();
+            const char* value = std::getenv(env.c_str());
             if (value == nullptr) { // 环境变量不存在
-                return;
+                throw EnvarNotExist(env);
             }
             result.append(original.substr(substart, iter->position() - substart)).append(value);
             substart = iter->position() + iter->length();

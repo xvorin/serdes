@@ -36,6 +36,8 @@ const char* const SINKFILE_NO_SPECIFIED = "sink file no specified";
 
 const char* const PROFILE_ONLY_ROOT = "profile can only be set in root";
 
+const char* const ENVAR_NOT_EXIST = "environment variable does not exist";
+
 }
 
 class Exception : public std::runtime_error {
@@ -208,6 +210,14 @@ class ProfileOnlyRoot : public Exception {
 public:
     ProfileOnlyRoot(const std::string& extension)
         : Exception(error_msg::PROFILE_ONLY_ROOT, extension)
+    {
+    }
+};
+
+class EnvarNotExist : public Exception {
+public:
+    EnvarNotExist(const std::string& extension)
+        : Exception(error_msg::ENVAR_NOT_EXIST, extension)
     {
     }
 };
