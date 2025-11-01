@@ -140,14 +140,14 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
 
     tree_.commit_model_changes();
 
-    std::string show_index;
-    if (has_cmd(cmds, "show", &show_index)) {
-        actions["show"](show_index); // exit
-    }
-
     // save
     if (has_cmd(cmds, "save")) {
         save();
+    }
+
+    std::string show_index;
+    if (has_cmd(cmds, "show", &show_index)) {
+        actions["show"](show_index); // exit
     }
 }
 
@@ -162,7 +162,7 @@ void CommandLineAPI<T>::set_sink_file(const std::string& sink, ParameterSerdesTy
     } catch (const BadFile& e) {
         std::cerr << "load " << sink_ << " failure!" << e.what() << std::endl;
         save(); // 文件不存在, 将默认值序列化到文件中
-        std::cout << "save " << sink_ << " with defalut value!" << std::endl;
+        std::cout << "save " << sink_ << " with current value!" << std::endl;
     }
 
     // 使能参数变更通知
