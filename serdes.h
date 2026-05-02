@@ -15,6 +15,7 @@
 #include "serdes/serdes/protobuf/protobuf_api.hpp"
 #endif
 
+#include "serdes/utils/file_lock.hpp"
 #include "serdes/utils/file_monite.hpp"
 
 namespace xvorin::serdes {
@@ -192,6 +193,8 @@ void CommandLineAPI<T>::load()
         throw SinkfileNoSpecified(" for load");
     }
 
+    FileLock lock(sink_, FileLock::READ_LOCK);
+
     std::fstream fin(sink_, std::ios::in);
     if (!fin) {
         throw BadFile("load " + sink_);
@@ -223,6 +226,8 @@ void CommandLineAPI<T>::save()
     if (sink_.empty()) {
         throw SinkfileNoSpecified(" for save");
     }
+
+    FileLock lock(sink_, FileLock::WRITE_LOCK);
 
     std::fstream fout(sink_, std::ios::out | std::ios::trunc);
     if (!fout) {
