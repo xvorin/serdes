@@ -25,18 +25,20 @@ const char* const DUMP_TOML_ERROR = "dump toml error";
 
 const char* const VALUE_CHECK_ERROR = "value check error";
 const char* const TYPE_NOT_SUPPORT = "type not support";
-const char* const INDEX_DUMPLICATE = "index duplicate while create";
+const char* const INDEX_DUPLICATE = "index duplicate while create";
 
 const char* const NEED_ROOT_PROFILE = "Need ParameterProfile for Root Parameter";
 
 const char* const PROTOTYPE_NOT_FOUND = "Prototype not found";
-const char* const PROTOTYPE_DUMPLICATE = "Prototype duplicate";
+const char* const PROTOTYPE_DUPLICATE = "Prototype duplicate";
 
 const char* const SINKFILE_NO_SPECIFIED = "sink file no specified";
 
 const char* const PROFILE_ONLY_ROOT = "profile can only be set in root";
 
 const char* const ENVAR_NOT_EXIST = "environment variable does not exist";
+
+const char* const PROTOBUF_TYPE_NOT_FOUND = "protobuf message type not found";
 
 }
 
@@ -61,7 +63,7 @@ public:
 class IndexDuplicate : public Exception {
 public:
     IndexDuplicate(const std::string& index)
-        : Exception(error_msg::INDEX_DUMPLICATE, index)
+        : Exception(error_msg::INDEX_DUPLICATE, index)
     {
     }
 };
@@ -193,7 +195,7 @@ public:
 class PrototypeDuplicate : public Exception {
 public:
     PrototypeDuplicate(const std::string& extension)
-        : Exception(error_msg::PROTOTYPE_DUMPLICATE, extension)
+        : Exception(error_msg::PROTOTYPE_DUPLICATE, extension)
     {
     }
 };
@@ -218,6 +220,14 @@ class EnvarNotExist : public Exception {
 public:
     EnvarNotExist(const std::string& extension)
         : Exception(error_msg::ENVAR_NOT_EXIST, extension)
+    {
+    }
+};
+
+class ProtobufTypeNotFound : public Exception {
+public:
+    ProtobufTypeNotFound(const std::string& extension)
+        : Exception(error_msg::PROTOBUF_TYPE_NOT_FOUND, extension)
     {
     }
 };

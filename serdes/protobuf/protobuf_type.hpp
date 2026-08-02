@@ -19,56 +19,110 @@ struct Pbtraits {
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, double>::value>::type> {
-    static std::string type() { return "double"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "double";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, float>::value>::type> {
-    static std::string type() { return "float"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "float";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, int32_t>::value>::type> {
-    static std::string type() { return "int32"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "int32";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, int64_t>::value>::type> {
-    static std::string type() { return "int64"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "int64";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, uint32_t>::value>::type> {
-    static std::string type() { return "uint32"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "uint32";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, uint64_t>::value>::type> {
-    static std::string type() { return "uint64"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "uint64";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, std::string>::value || std::is_same<T, envar>::value>::type> {
-    static std::string type() { return "string"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "string";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, buffer>::value>::type> {
-    static std::string type() { return "bytes"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "bytes";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, bool>::value>::type> {
-    static std::string type() { return "bool"; }
-    static std::string value() { return std::string(); }
+    static std::string type()
+    {
+        return "bool";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>
@@ -79,7 +133,10 @@ struct Pbtraits<T, typename std::enable_if<std::is_enum<T>::value>::type> {
         xvorin::serdes::utils::split(Parameter::readable_detail_type(typeid(T)), pieces, "::");
         return pieces.back();
     }
-    static std::string value() { return std::string(); }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 // clang-format off
@@ -127,6 +184,28 @@ static inline std::string generate_pbtype_name(const std::string& name)
     return type;
 }
 
+// 从可读类型名中提取 protobuf 消息名: 去掉命名空间, 只取最后一段
+// 例如 ihs::evdet::InputFrame -> InputFrame (与 Pbtraits<is_object>::type() 保持一致)
+static inline std::string extract_pbmessage_name(const std::string& readable_type)
+{
+    std::vector<std::string> pieces;
+    xvorin::serdes::utils::split(readable_type, pieces, "::");
+    return pieces.empty() ? readable_type : pieces.back();
+}
+
+// 从可读类型名的命名空间自动推导 protobuf package: 去掉最后一段(类型名), 其余用 '.' 连接
+// 例如 ihs::evdet::InputFrame -> ihs.evdet; 无命名空间时返回空字符串
+static inline std::string extract_pbpackage_name(const std::string& readable_type)
+{
+    std::vector<std::string> pieces;
+    xvorin::serdes::utils::split(readable_type, pieces, "::");
+    std::string package;
+    for (size_t i = 0; i + 1 < pieces.size(); ++i) {
+        package += (package.empty() ? "" : ".") + pieces[i];
+    }
+    return package;
+}
+
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<is_object<T>::value>::type> {
     static std::string type()
@@ -135,7 +214,10 @@ struct Pbtraits<T, typename std::enable_if<is_object<T>::value>::type> {
         xvorin::serdes::utils::split(Parameter::readable_detail_type(typeid(T)), pieces, "::");
         return pieces.back();
     }
-    static std::string value() { return std::string(); }
+    static std::string value()
+    {
+        return std::string();
+    }
 };
 
 template <typename T>

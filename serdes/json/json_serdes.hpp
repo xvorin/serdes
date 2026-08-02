@@ -25,7 +25,7 @@ class JsonSerdes<T, typename std::enable_if<is_basic<T>::value && !is_extension_
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
-        parameter->value = jin.get<T>();
+        parameter->value = jin.is_null() ? T() : jin.get<T>();
     }
 };
 
@@ -43,7 +43,7 @@ class JsonSerdes<T, typename std::enable_if<std::is_same<T, buffer>::value>::typ
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
-        parameter->value = base64_decode(jin.get<std::string>());
+        parameter->value = jin.is_null() ? T() : base64_decode(jin.get<std::string>());
     }
 };
 
@@ -61,7 +61,7 @@ class JsonSerdes<T, typename std::enable_if<std::is_same<T, envar>::value>::type
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
-        parameter->value = jin.get<std::string>();
+        parameter->value = jin.is_null() ? T() : jin.get<std::string>();
     }
 };
 
@@ -79,7 +79,7 @@ class JsonSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public S
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
-        parameter->value = Converter<T>::from_string(jin.get<std::string>());
+        parameter->value = jin.is_null() ? T() : Converter<T>::from_string(jin.get<std::string>());
     }
 };
 
@@ -101,6 +101,9 @@ class JsonSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
+        if (jin.is_null()) {
+            return;
+        }
 
         for (const auto& child_pair : parameter->children()) {
             const auto& child = child_pair.second;
@@ -141,6 +144,9 @@ class JsonSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : publ
 
         auto children = parameter->mutable_children();
         children->clear();
+        if (jin.is_null()) {
+            return;
+        }
 
         size_t counter = 0;
         for (const auto& jchild : jin) {
@@ -173,6 +179,9 @@ class JsonSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public Se
 
         auto children = parameter->mutable_children();
         children->clear();
+        if (jin.is_null()) {
+            return;
+        }
 
         for (const auto& jpair : jin.items()) {
             const auto& subkey = jpair.key();
@@ -210,6 +219,9 @@ class JsonSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public Se
 
         auto children = parameter->mutable_children();
         children->clear();
+        if (jin.is_null()) {
+            return;
+        }
 
         size_t counter = 0;
         for (const auto& jchild : jin) {

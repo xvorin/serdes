@@ -3,6 +3,7 @@
 #include "serdes/serdes/protobuf/protobuf_type.hpp"
 #include "serdes/serdes/serdes.hpp"
 #include "serdes/types/traits.hpp"
+#include "serdes/utils/exception.hpp"
 
 #include <iostream>
 #include <type_traits>
@@ -116,6 +117,9 @@ public:
     google::protobuf::Message* create_message(const std::string& type_name)
     {
         auto desc = get_descriptor(type_name);
+        if (!desc) { // 类型未在动态池中找到: 抛 serdes 统一异常, 避免 GetPrototype(nullptr) 触发段错误
+            throw ProtobufTypeNotFound(package_ + type_name);
+        }
         return dynamic_factory_.GetPrototype(desc)->New();
     }
 
@@ -225,13 +229,13 @@ public:
 
     bool from_binary_string(const std::string& type_name, const std::string& pbbin)
     {
-        set_root(create_message(type_name));
+        prepare_root(type_name);
         return root_ && root_->ParseFromString(pbbin);
     }
 
     bool from_txt_string(const std::string& type_name, const std::string& pbtxt)
     {
-        set_root(create_message(type_name));
+        prepare_root(type_name);
         return root_ && google::protobuf::TextFormat::ParseFromString(pbtxt, root());
     }
 
@@ -248,11 +252,24 @@ public:
     void set_root(google::protobuf::Message* root)
     {
         root_.reset(root); // unique_ptr接管所有权
+        root_type_name_.clear();
+    }
+
+    /// 复用已有 root Message 对象: 类型匹配时 Clear() 重用, 避免反复 new/delete
+    void prepare_root(const std::string& type_name)
+    {
+        if (root_ && root_type_name_ == type_name) {
+            root_->Clear(); // 复用: 只重置字段, 不释放内存
+        } else {
+            set_root(create_message(type_name));
+            root_type_name_ = type_name;
+        }
     }
 
 private:
     std::shared_ptr<ProtobufMessageFactory> factory_;
     std::unique_ptr<google::protobuf::Message> root_;
+    std::string root_type_name_; // 缓存当前 root 的类型名, 用于判断是否可复用
     std::stack<ProtobufMessage> msgs;
 
     friend struct EnterProtobufMessageGuard;
@@ -460,7 +477,7 @@ class ProtobufSerdes<T, typename std::enable_if<is_object<T>::value>::type> : pu
         auto parent = ctx.parent_message();
 
         if (!parent) { // 没有上一级 说明是根
-            ctx.set_root(ctx.create_message(detail::Pbtraits<T>::type()));
+            ctx.prepare_root(detail::Pbtraits<T>::type());
             auto current = detail::ProtobufMessage(ctx.root());
             // 处理下一级
             detail::EnterProtobufMessageGuard guard(ctx, current);

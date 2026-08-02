@@ -10,8 +10,12 @@ public:
     explicit ProtobufAPI(ParameterTree<T>& tree)
         : tree_(tree)
     {
+        // 未手动指定 package 时, 自动从根类型的命名空间推导 (ihs::evdet::InputFrame -> ihs.evdet)
+        // 之后调用 set_package 可覆盖此默认值
+        package_ = detail::extract_pbpackage_name(Parameter::readable_detail_type(typeid(T)));
         pbdef_ = to_pbdef(tree_.root());
         factory_ = std::make_shared<detail::ProtobufMessageFactory>(package_, pbdef_);
+        ctx_ = std::make_unique<detail::ProtobufSerdesContext>(factory_);
     }
 
     void set_package(std::string package);
@@ -40,6 +44,7 @@ private:
     std::string package_;
     std::string pbdef_;
     std::shared_ptr<detail::ProtobufMessageFactory> factory_;
+    std::unique_ptr<detail::ProtobufSerdesContext> ctx_; // 持久化 context, 跨调用复用 Message 对象
 };
 
 template <typename T>
@@ -49,6 +54,7 @@ void ProtobufAPI<T>::set_package(std::string package)
         package_.swap(package);
         pbdef_ = to_pbdef(tree_.root());
         factory_ = std::make_shared<detail::ProtobufMessageFactory>(package_, pbdef_);
+        ctx_ = std::make_unique<detail::ProtobufSerdesContext>(factory_);
     }
 }
 
@@ -69,10 +75,9 @@ void ProtobufAPI<T>::from_pbbin(const std::string& index, const std::string& s)
 {
     auto p = tree_.parameter(index);
 
-    detail::ProtobufSerdesContext pbbin_in(factory_);
-    pbbin_in.from_binary_string(detail::generate_pbtype_name(p->readable_detail_type()), s);
+    ctx_->from_binary_string(detail::extract_pbmessage_name(p->readable_detail_type()), s);
 
-    tree_.deserialize(p, &pbbin_in, ParameterSerdesType::PST_PBFMT);
+    tree_.deserialize(p, ctx_.get(), ParameterSerdesType::PST_PBFMT);
     tree_.commit_model_changes();
 }
 
@@ -87,10 +92,9 @@ void ProtobufAPI<T>::from_pbtxt(const std::string& index, const std::string& s)
 {
     auto p = tree_.parameter(index);
 
-    detail::ProtobufSerdesContext pbtxt_in(factory_);
-    pbtxt_in.from_txt_string(detail::generate_pbtype_name(p->readable_detail_type()), s);
+    ctx_->from_txt_string(detail::extract_pbmessage_name(p->readable_detail_type()), s);
 
-    tree_.deserialize(p, &pbtxt_in, ParameterSerdesType::PST_PBFMT);
+    tree_.deserialize(p, ctx_.get(), ParameterSerdesType::PST_PBFMT);
     tree_.commit_model_changes();
 }
 
@@ -105,10 +109,9 @@ std::string ProtobufAPI<T>::to_pbbin(const std::string& index)
 {
     tree_.commit_value_changes();
 
-    detail::ProtobufSerdesContext pbbin_out(factory_);
-    tree_.serialize(tree_.parameter(index), &pbbin_out, ParameterSerdesType::PST_PBFMT);
+    tree_.serialize(tree_.parameter(index), ctx_.get(), ParameterSerdesType::PST_PBFMT);
 
-    return pbbin_out.to_binary_string();
+    return ctx_->to_binary_string();
 }
 
 template <typename T>
@@ -122,10 +125,9 @@ std::string ProtobufAPI<T>::to_pbtxt(const std::string& index)
 {
     tree_.commit_value_changes();
 
-    detail::ProtobufSerdesContext pbtxt_out(factory_);
-    tree_.serialize(tree_.parameter(index), &pbtxt_out, ParameterSerdesType::PST_PBFMT);
+    tree_.serialize(tree_.parameter(index), ctx_.get(), ParameterSerdesType::PST_PBFMT);
 
-    return pbtxt_out.to_txt_string();
+    return ctx_->to_txt_string();
 }
 
 template <typename T>
@@ -156,10 +158,9 @@ std::string ProtobufAPI<T>::to_pbdbstr(const std::string& index, bool simplified
 {
     tree_.commit_value_changes();
 
-    detail::ProtobufSerdesContext pbdbstr_out(factory_);
-    tree_.serialize(tree_.parameter(index), &pbdbstr_out, ParameterSerdesType::PST_PBFMT);
+    tree_.serialize(tree_.parameter(index), ctx_.get(), ParameterSerdesType::PST_PBFMT);
 
-    return pbdbstr_out.to_debug_string(simplified);
+    return ctx_->to_debug_string(simplified);
 }
 
 }
