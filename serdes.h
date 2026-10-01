@@ -11,6 +11,9 @@
 #if ENABLE_TOML
 #include "serdes/serdes/toml/toml_api.hpp"
 #endif
+#if ENABLE_XML
+#include "serdes/serdes/xml/xml_api.hpp"
+#endif
 #if ENABLE_PROTOBUF
 #include "serdes/serdes/protobuf/protobuf_api.hpp"
 #endif
@@ -18,7 +21,25 @@
 #include "serdes/utils/file_lock.hpp"
 #include "serdes/utils/file_monite.hpp"
 
+#include <cctype>
+
 namespace xvorin::serdes {
+
+// 默认配置文件格式: 优先toml(可保存注释), 依次回退到其他已启用的后端, 避免关闭某后端后引用不存在的枚举值
+inline ParameterSerdesType default_sink_type()
+{
+#if ENABLE_TOML
+    return ParameterSerdesType::PST_TOML;
+#elif ENABLE_JSON
+    return ParameterSerdesType::PST_JSON;
+#elif ENABLE_YAML
+    return ParameterSerdesType::PST_YAML;
+#elif ENABLE_XML
+    return ParameterSerdesType::PST_XML;
+#else
+    return ParameterSerdesType::PST_STRU;
+#endif
+}
 
 template <typename T>
 class CommandLineAPI {
@@ -36,7 +57,7 @@ public:
     /// @brief 设置参数持久化的配置文件
     /// @param sink 配置文件名称
     /// @param sink_type 配置文件格式
-    void set_sink_file(const std::string& sink, ParameterSerdesType sink_type = ParameterSerdesType::PST_TOML);
+    void set_sink_file(const std::string& sink, ParameterSerdesType sink_type = default_sink_type());
 
     /// @brief 是否已经开启文件监控
     /// @return
@@ -73,12 +94,12 @@ template <typename T>
 void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
 {
     static const auto help_info = R"(
-        [--<index> <value>] 临时修改参数值
-        [--create  <index>] 临时添加参数
-        [--remove  <index>] 临时删除参数
-        [--save]            将--<index>/--create/--remove等临时修改持久化到配置文件
-        [--show [index]]    展示指定index的参数结构;index选填,不填时展示整体参数结构
-        [--help]            展示此帮助信息
+        [ --<index>[=<value>] ] 临时修改参数值;只按首个'='切开,值内可再含'=': --vf=format=yuv420p,x=1
+        [ --create   <index>  ] 临时添加参数
+        [ --remove   <index>  ] 临时删除参数
+        [ --save ]              将--<index>/--create/--remove等临时修改持久化到配置文件
+        [ --show     [index]  ] 展示指定index的参数结构;index选填,不填时展示整体参数结构
+        [ --help ]              展示此帮助信息
     )";
 
     // clang-format off
@@ -91,16 +112,41 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
     };
     // clang-format on
 
+    auto trim = [](const std::string& s) {
+        size_t b = 0, e = s.size();
+        while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) {
+            ++b;
+        }
+        while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1]))) {
+            --e;
+        }
+        return s.substr(b, e - b);
+    };
+
     std::vector<std::pair<std::string, std::string>> cmds;
     std::vector<std::string> args;
     for (int i = 0; i < argc; i++) {
-        std::istringstream iss(std::string(argv[i]));
-        std::string token;
-        while (std::getline(iss, token, '=')) {
-            if (!token.empty()) {
-                args.push_back(token);
+        const std::string arg = trim(argv[i]);
+        // 选项只按【首个】'=' 切开，右侧整体作为值，避免 --vf=format=yuv420p 被切碎。
+        // 非选项（值 argv）不再按 '=' 切，所以 --k format=yuv 也能保住值里的 '='。
+        if (arg.size() >= 2 && arg.compare(0, 2, "--") == 0) {
+            const size_t eq = arg.find('=');
+            if (eq != std::string::npos) {
+                const std::string k = trim(arg.substr(0, eq));
+                const std::string v = trim(arg.substr(eq + 1));
+                if (!k.empty()) {
+                    args.push_back(k);
+                }
+                if (!v.empty()) {
+                    args.push_back(v);
+                }
+                continue;
             }
         }
+        if (arg.empty() || arg == "=") {
+            continue; // --k = v 拆成三个 argv 时丢掉单独的 '='
+        }
+        args.push_back(arg[0] == '=' ? trim(arg.substr(1)) : arg); // --k =v
     }
 
     for (size_t i = 1; i < args.size(); i++) {
@@ -329,6 +375,12 @@ private:
         }
 #endif
 
+#if ENABLE_XML
+        if (this->sink_type() == ParameterSerdesType::PST_XML) {
+            out = this->to_xml();
+        }
+#endif
+
 #if ENABLE_PROTOBUF
         if (this->sink_type() == ParameterSerdesType::PST_PBFMT) {
             out = this->to_pbtxt();
@@ -358,6 +410,12 @@ private:
         }
 #endif
 
+#if ENABLE_XML
+        if (this->sink_type() == ParameterSerdesType::PST_XML) {
+            this->from_xml(in);
+        }
+#endif
+
 #if ENABLE_PROTOBUF
         if (this->sink_type() == ParameterSerdesType::PST_PBFMT) {
             this->from_pbtxt(in);
@@ -379,6 +437,10 @@ using SerdesTree = ExtendedParameterTree<T, CommandLineAPI<T>
 #if ENABLE_TOML
     ,
     TomlAPI<T>
+#endif
+#if ENABLE_XML
+    ,
+    XmlAPI<T>
 #endif
 #if ENABLE_PROTOBUF
     ,

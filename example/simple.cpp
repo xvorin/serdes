@@ -69,12 +69,14 @@ int main(int argc, char** argv)
     show("to_json", sender->to_json());
     show("to_toml", sender->to_toml());
     show("to_yaml", sender->to_yaml());
+    show("to_xml", sender->to_xml());
 
     // 反序列化
     auto receiver = xvorin::serdes::create<ExampleRoot>("receiver");
     receiver->from_json(sender->to_json());
     receiver->from_toml(sender->to_toml());
     receiver->from_yaml(sender->to_yaml());
+    receiver->from_xml(sender->to_xml());
 
 #if ENABLE_PROTOBUF
     // 支持Protobuf(3.19.6), 因Protobuf过重, 默认不开启, 可在serdes/serdes/config.h中配置启用

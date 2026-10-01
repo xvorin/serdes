@@ -71,7 +71,7 @@ public:
             // 挂接成员类型: 记录偏移量 用于针对结构体的序列化与反序列化; 记录回调函数 用于变更通知
             auto child = std::make_shared<TraitedParameter<M>>(std::move(subkey), offset, std::move(comment), std::move(cb), std::move(verinfo));
             // 设置基础类型成员默认值
-            P value;
+            P value {};
             child->value = *reinterpret_cast<M*>(reinterpret_cast<char*>(&value) + offset);
             parent->insert_child(child);
         }

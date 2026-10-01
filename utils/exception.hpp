@@ -18,10 +18,12 @@ const char* const BAD_FILE = "bad file";
 const char* const PARSE_JSON_ERROR = "parse json error";
 const char* const PARSE_YAML_ERROR = "parse yaml error";
 const char* const PARSE_TOML_ERROR = "parse toml error";
+const char* const PARSE_XML_ERROR = "parse xml error";
 
 const char* const DUMP_JSON_ERROR = "dump json error";
 const char* const DUMP_YAML_ERROR = "dump yaml error";
 const char* const DUMP_TOML_ERROR = "dump toml error";
+const char* const DUMP_XML_ERROR = "dump xml error";
 
 const char* const VALUE_CHECK_ERROR = "value check error";
 const char* const TYPE_NOT_SUPPORT = "type not support";
@@ -121,6 +123,14 @@ public:
     }
 };
 
+class ParseXmlException : public Exception {
+public:
+    ParseXmlException(const std::string& extension)
+        : Exception(error_msg::PARSE_XML_ERROR, extension)
+    {
+    }
+};
+
 class DumpJsonException : public Exception {
 public:
     DumpJsonException(const std::string& extension)
@@ -141,6 +151,14 @@ class DumpTomlException : public Exception {
 public:
     DumpTomlException(const std::string& extension)
         : Exception(error_msg::DUMP_TOML_ERROR, extension)
+    {
+    }
+};
+
+class DumpXmlException : public Exception {
+public:
+    DumpXmlException(const std::string& extension)
+        : Exception(error_msg::DUMP_XML_ERROR, extension)
     {
     }
 };

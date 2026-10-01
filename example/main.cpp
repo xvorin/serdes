@@ -55,6 +55,24 @@ void for_toml(int argc, char** argv)
     ep2->save();
 }
 
+void for_xml(int argc, char** argv)
+{
+    auto ep1 = xvorin::serdes::create<ExampleParameter>();
+    ep1->set_sink_file("extest1.xml", xvorin::serdes::ParameterSerdesType::PST_XML);
+    ep1->parse_command_line(argc, argv);
+    {
+        std::unique_lock<std::mutex> guard;
+        auto value = ep1->mutable_value(guard);
+        value->init_v3();
+    }
+    ep1->save();
+
+    auto ep2 = xvorin::serdes::create<ExampleParameter>();
+    ep2->set_sink_file("extest2.xml", xvorin::serdes::ParameterSerdesType::PST_XML);
+    ep2->from_xml(ep1->to_xml());
+    ep2->save();
+}
+
 #if ENABLE_PROTOBUF
 void for_pbtxt(int argc, char** argv)
 {
@@ -106,6 +124,8 @@ int main(int argc, char** argv)
     for_json(argc, argv);
     for_yaml(argc, argv);
     for_toml(argc, argv);
+    for_xml(argc, argv);
+
 #if ENABLE_PROTOBUF
     for_pbtxt(argc, argv);
     for_pbbin(10000);

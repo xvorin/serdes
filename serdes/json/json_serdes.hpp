@@ -61,7 +61,12 @@ class JsonSerdes<T, typename std::enable_if<std::is_same<T, envar>::value>::type
     {
         auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
-        parameter->value = jin.is_null() ? T() : jin.get<std::string>();
+        // envar与std::string可互转, 三目运算符会产生歧义, 须用if/else显式区分
+        if (jin.is_null()) {
+            parameter->value = T();
+        } else {
+            parameter->value = jin.get<std::string>();
+        }
     }
 };
 
