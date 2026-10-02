@@ -253,10 +253,11 @@ void CommandLineAPI<T>::load()
     {
         std::lock_guard<std::mutex> guard(sink_content_lock_);
         if (content == sink_content_) {
-            std::cout << "with same content, no need to parse!" << std::endl;
-            return;
+            return; // 内容未变(含自身写入触发的回调), 静默返回
         }
     }
+
+    std::cout << "reload " << sink_ << std::endl; // 仅在内容真正变化时打印
 
     deserialize(content);
 
@@ -293,7 +294,6 @@ template <typename T>
 void CommandLineAPI<T>::reload()
 {
     try {
-        std::cout << "reload " << sink_ << std::endl;
         load();
     } catch (ViolationException& e) {
         save();

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -78,7 +80,9 @@ private:
             return false;
         }
 
-        if (inotify_add_watch(inotify_fd_, directory_.c_str(), IN_CLOSE_WRITE) < 0) {
+        // 覆盖: 写入关闭 / 移入(如 mv 替换) / 新建 / 删除; 回调按文件名过滤
+        const uint32_t mask = IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE | IN_DELETE;
+        if (inotify_add_watch(inotify_fd_, directory_.c_str(), mask) < 0) {
             std::cerr << "inotify_add_watch failure for " << directory_ << " " << strerror(errno) << std::endl;
             close(inotify_fd_);
             inotify_fd_ = -1;
@@ -139,8 +143,16 @@ private:
                 auto event = reinterpret_cast<struct inotify_event*>(ptr);
                 ptr += sizeof(struct inotify_event) + event->len;
 
-                if (event->mask & IN_CLOSE_WRITE && std::string(event->name) == file_ && cb_) {
-                    cb_();
+                const uint32_t relevant = IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE | IN_DELETE;
+                if ((event->mask & relevant) && std::string(event->name) == file_ && cb_) {
+                    // 重载失败(如文件正被写入/被删)不应终止监控线程
+                    try {
+                        cb_();
+                    } catch (const std::exception& e) {
+                        std::cerr << "file monitor reload failed: " << e.what() << std::endl;
+                    } catch (...) {
+                        std::cerr << "file monitor reload failed: unknown exception" << std::endl;
+                    }
                 }
             }
         }

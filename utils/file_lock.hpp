@@ -28,7 +28,10 @@ public:
         , owns_fd_(true)
         , locked_(false)
     {
-        fd_ = open(filepath.c_str(), O_RDWR | O_CREAT, 0644);
+        // 读锁用只读方式打开: 以写方式打开的文件关闭时会触发 inotify 的 IN_CLOSE_WRITE
+        // (即使没写过数据), 会让文件监控在 load() 时自激。flock 与打开模式无关。
+        const int flags = (type == WRITE_LOCK) ? (O_RDWR | O_CREAT) : (O_RDONLY | O_CREAT);
+        fd_ = open(filepath.c_str(), flags, 0644);
         if (-1 == fd_) {
             throw std::system_error(errno, std::generic_category(), "FileLock: open failed");
         }
