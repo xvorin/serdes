@@ -18,9 +18,13 @@ public:
 
     void from_yaml(const std::string& s);
     void from_yaml(const std::string& index, const std::string& s);
+    void from_yaml(const std::string& s, T* value);
+    void from_yaml(const std::string& index, const std::string& s, T* value);
 
     std::string to_yaml();
     std::string to_yaml(const std::string& index);
+    std::string to_yaml(const T& value);
+    std::string to_yaml(const T& value, const std::string& index);
 
 private:
     ParameterTree<T>& tree_;
@@ -35,6 +39,18 @@ void YamlAPI<T>::from_yaml(const std::string& s)
 template <typename T>
 void YamlAPI<T>::from_yaml(const std::string& index, const std::string& s)
 {
+    from_yaml(index, s, tree_.unsafe_value());
+}
+
+template <typename T>
+void YamlAPI<T>::from_yaml(const std::string& s, T* value)
+{
+    from_yaml(tree_.root(), s, value);
+}
+
+template <typename T>
+void YamlAPI<T>::from_yaml(const std::string& index, const std::string& s, T* value)
+{
     fkyaml::ordered_node yin;
     try {
         yin = fkyaml::ordered_node::deserialize(s);
@@ -43,7 +59,7 @@ void YamlAPI<T>::from_yaml(const std::string& index, const std::string& s)
     }
 
     tree_.deserialize(tree_.parameter(index), &yin, ParameterSerdesType::PST_YAML);
-    tree_.commit_model_changes();
+    tree_.commit_model_changes(value);
 }
 
 template <typename T>
@@ -58,7 +74,6 @@ std::string YamlAPI<T>::to_yaml(const std::string& index)
     tree_.commit_value_changes();
 
     fkyaml::ordered_node yout;
-    // yout.SetStyle(YAML::EmitterStyle::Block);
     tree_.serialize(tree_.parameter(index), &yout, ParameterSerdesType::PST_YAML);
 
     std::stringstream ss;
@@ -71,4 +86,27 @@ std::string YamlAPI<T>::to_yaml(const std::string& index)
     return ss.str();
 }
 
+template <typename T>
+std::string YamlAPI<T>::to_yaml(const T& value)
+{
+    return to_yaml(value, tree_.root());
+}
+
+template <typename T>
+std::string YamlAPI<T>::to_yaml(const T& value, const std::string& index)
+{
+    tree_.commit_value_changes(value);
+
+    fkyaml::ordered_node yout;
+    tree_.serialize(tree_.parameter(index), &yout, ParameterSerdesType::PST_YAML);
+
+    std::stringstream ss;
+    try {
+        ss << yout;
+    } catch (std::exception& e) {
+        throw DumpYamlException(e.what());
+    }
+
+    return ss.str();
+}
 }

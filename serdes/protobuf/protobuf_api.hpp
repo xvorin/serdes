@@ -23,21 +23,31 @@ public:
 
     void from_pbbin(const std::string& s);
     void from_pbbin(const std::string& index, const std::string& s);
+    void from_pbbin(const std::string& s, T* value);
+    void from_pbbin(const std::string& index, const std::string& s, T* value);
 
     void from_pbtxt(const std::string& s);
     void from_pbtxt(const std::string& index, const std::string& s);
+    void from_pbtxt(const std::string& s, T* value);
+    void from_pbtxt(const std::string& index, const std::string& s, T* value);
 
     std::string to_pbbin();
     std::string to_pbbin(const std::string& index);
+    std::string to_pbbin(const T& value);
+    std::string to_pbbin(const T& value, const std::string& index);
 
     std::string to_pbtxt();
     std::string to_pbtxt(const std::string& index);
+    std::string to_pbtxt(const T& value);
+    std::string to_pbtxt(const T& value, const std::string& index);
 
     std::string to_pbdef();
     std::string to_pbdef(const std::string& index);
 
     std::string to_pbdbstr(bool simplified = false);
     std::string to_pbdbstr(const std::string& index, bool simplified = false);
+    std::string to_pbdbstr(const T& value, bool simplified = false);
+    std::string to_pbdbstr(const T& value, const std::string& index, bool simplified = false);
 
 private:
     ParameterTree<T>& tree_;
@@ -73,12 +83,24 @@ void ProtobufAPI<T>::from_pbbin(const std::string& s)
 template <typename T>
 void ProtobufAPI<T>::from_pbbin(const std::string& index, const std::string& s)
 {
+    from_pbbin(index, s, tree_.unsafe_value());
+}
+
+template <typename T>
+void ProtobufAPI<T>::from_pbbin(const std::string& s, T* value)
+{
+    from_pbbin(tree_.root(), s, value);
+}
+
+template <typename T>
+void ProtobufAPI<T>::from_pbbin(const std::string& index, const std::string& s, T* value)
+{
     auto p = tree_.parameter(index);
 
     ctx_->from_binary_string(detail::extract_pbmessage_name(p->readable_detail_type()), s);
 
     tree_.deserialize(p, ctx_.get(), ParameterSerdesType::PST_PBFMT);
-    tree_.commit_model_changes();
+    tree_.commit_model_changes(value);
 }
 
 template <typename T>
@@ -90,12 +112,24 @@ void ProtobufAPI<T>::from_pbtxt(const std::string& s)
 template <typename T>
 void ProtobufAPI<T>::from_pbtxt(const std::string& index, const std::string& s)
 {
+    from_pbtxt(index, s, tree_.unsafe_value());
+}
+
+template <typename T>
+void ProtobufAPI<T>::from_pbtxt(const std::string& s, T* value)
+{
+    from_pbtxt(tree_.root(), s, value);
+}
+
+template <typename T>
+void ProtobufAPI<T>::from_pbtxt(const std::string& index, const std::string& s, T* value)
+{
     auto p = tree_.parameter(index);
 
     ctx_->from_txt_string(detail::extract_pbmessage_name(p->readable_detail_type()), s);
 
     tree_.deserialize(p, ctx_.get(), ParameterSerdesType::PST_PBFMT);
-    tree_.commit_model_changes();
+    tree_.commit_model_changes(value);
 }
 
 template <typename T>
@@ -115,6 +149,22 @@ std::string ProtobufAPI<T>::to_pbbin(const std::string& index)
 }
 
 template <typename T>
+std::string ProtobufAPI<T>::to_pbbin(const T& value)
+{
+    return to_pbbin(value, tree_.root());
+}
+
+template <typename T>
+std::string ProtobufAPI<T>::to_pbbin(const T& value, const std::string& index)
+{
+    tree_.commit_value_changes(value);
+
+    tree_.serialize(tree_.parameter(index), ctx_.get(), ParameterSerdesType::PST_PBFMT);
+
+    return ctx_->to_binary_string();
+}
+
+template <typename T>
 std::string ProtobufAPI<T>::to_pbtxt()
 {
     return to_pbtxt(tree_.root());
@@ -124,6 +174,22 @@ template <typename T>
 std::string ProtobufAPI<T>::to_pbtxt(const std::string& index)
 {
     tree_.commit_value_changes();
+
+    tree_.serialize(tree_.parameter(index), ctx_.get(), ParameterSerdesType::PST_PBFMT);
+
+    return ctx_->to_txt_string();
+}
+
+template <typename T>
+std::string ProtobufAPI<T>::to_pbtxt(const T& value)
+{
+    return to_pbtxt(value, tree_.root());
+}
+
+template <typename T>
+std::string ProtobufAPI<T>::to_pbtxt(const T& value, const std::string& index)
+{
+    tree_.commit_value_changes(value);
 
     tree_.serialize(tree_.parameter(index), ctx_.get(), ParameterSerdesType::PST_PBFMT);
 
@@ -163,4 +229,19 @@ std::string ProtobufAPI<T>::to_pbdbstr(const std::string& index, bool simplified
     return ctx_->to_debug_string(simplified);
 }
 
+template <typename T>
+std::string ProtobufAPI<T>::to_pbdbstr(const T& value, bool simplified)
+{
+    return to_pbdbstr(value, tree_.root(), simplified);
+}
+
+template <typename T>
+std::string ProtobufAPI<T>::to_pbdbstr(const T& value, const std::string& index, bool simplified)
+{
+    tree_.commit_value_changes(value);
+
+    tree_.serialize(tree_.parameter(index), ctx_.get(), ParameterSerdesType::PST_PBFMT);
+
+    return ctx_->to_debug_string(simplified);
+}
 }

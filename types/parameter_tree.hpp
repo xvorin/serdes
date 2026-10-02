@@ -26,9 +26,19 @@ public:
     void commit_model_changes();
 
     /**
+     * 将 model_ 的内容刷入外部结构体 value: model_ → value
+     */
+    void commit_model_changes(T* value);
+
+    /**
      *  value_的内容发生变化时须调用此接口, 将数据刷入model_: value_->model_
      */
     void commit_value_changes();
+
+    /**
+     * 将外部结构体内容刷入 model_: value → model_
+     */
+    void commit_value_changes(const T& value);
 
     /**
      * 按指定方式对参数进行序列化
@@ -163,9 +173,21 @@ void ParameterTree<T>::commit_model_changes()
 }
 
 template <typename T>
+void ParameterTree<T>::commit_model_changes(T* value)
+{
+    serialize(model_, value, ParameterSerdesType::PST_STRU);
+}
+
+template <typename T>
 void ParameterTree<T>::commit_value_changes()
 {
     deserialize(model_, &value_, ParameterSerdesType::PST_STRU);
+}
+
+template <typename T>
+void ParameterTree<T>::commit_value_changes(const T& value)
+{
+    deserialize(model_, &value, ParameterSerdesType::PST_STRU);
 }
 
 template <typename T>

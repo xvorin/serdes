@@ -14,9 +14,13 @@ public:
 
     void from_json(const std::string& s);
     void from_json(const std::string& index, const std::string& s);
+    void from_json(const std::string& s, T* value);
+    void from_json(const std::string& index, const std::string& s, T* value);
 
     std::string to_json(int dump = 4);
     std::string to_json(const std::string& index, int dump = 4);
+    std::string to_json(const T& value, int dump = 4);
+    std::string to_json(const T& value, const std::string& index, int dump = 4);
 
 private:
     ParameterTree<T>& tree_;
@@ -31,6 +35,18 @@ void JsonAPI<T>::from_json(const std::string& s)
 template <typename T>
 void JsonAPI<T>::from_json(const std::string& index, const std::string& s)
 {
+    from_json(index, s, tree_.unsafe_value());
+}
+
+template <typename T>
+void JsonAPI<T>::from_json(const std::string& s, T* value)
+{
+    from_json(tree_.root(), s, value);
+}
+
+template <typename T>
+void JsonAPI<T>::from_json(const std::string& index, const std::string& s, T* value)
+{
     nlohmann::ordered_json jin;
     try {
         jin = nlohmann::ordered_json::parse(s);
@@ -39,7 +55,7 @@ void JsonAPI<T>::from_json(const std::string& index, const std::string& s)
     }
 
     tree_.deserialize(tree_.parameter(index), &jin, ParameterSerdesType::PST_JSON);
-    tree_.commit_model_changes();
+    tree_.commit_model_changes(value);
 }
 
 template <typename T>
@@ -66,4 +82,27 @@ std::string JsonAPI<T>::to_json(const std::string& index, int dump)
     return ss.str();
 }
 
+template <typename T>
+std::string JsonAPI<T>::to_json(const T& value, int dump)
+{
+    return to_json(value, tree_.root(), dump);
+}
+
+template <typename T>
+std::string JsonAPI<T>::to_json(const T& value, const std::string& index, int dump)
+{
+    tree_.commit_value_changes(value);
+
+    nlohmann::ordered_json jout;
+    tree_.serialize(tree_.parameter(index), &jout, ParameterSerdesType::PST_JSON);
+
+    std::stringstream ss;
+    try {
+        ss << (dump > 0 ? jout.dump(dump) : jout.dump());
+    } catch (std::exception& e) {
+        throw DumpJsonException(e.what());
+    }
+
+    return ss.str();
+}
 }
