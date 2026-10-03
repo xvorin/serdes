@@ -21,7 +21,9 @@
 #include "serdes/utils/file_lock.hpp"
 #include "serdes/utils/file_monite.hpp"
 
+#include <algorithm>
 #include <cctype>
+#include <set>
 
 namespace xvorin::serdes {
 
@@ -52,7 +54,9 @@ public:
     /// @brief 命令行参数解析
     /// @param argc 参数个数
     /// @param argv 参数列表
-    void parse_command_line(int argc, char** argv);
+    /// @param ignore_foreign 为 true 时忽略不属于本树的 index(其根段与树 root 不一致),
+    ///        用于多组件共享同一命令行, 各组件只认领以自身名字为根的参数
+    void parse_command_line(int argc, char** argv, bool ignore_foreign = false);
 
     /// @brief 设置参数持久化的配置文件
     /// @param sink 配置文件名称
@@ -80,6 +84,8 @@ private:
     virtual std::string serialize() = 0;
     virtual void deserialize(const std::string&) = 0;
     bool has_cmd(std::vector<std::pair<std::string, std::string>> cmds, const std::string& target, std::string* param = nullptr);
+    /// @brief 丢弃 index 根段与树 root 不一致的命令(多组件共享命令行时, 各组件只认领自身参数)
+    void drop_foreign_cmds(std::vector<std::pair<std::string, std::string>>& cmds);
 
 private:
     ParameterTree<T>& tree_;
@@ -91,7 +97,7 @@ private:
 };
 
 template <typename T>
-void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
+void CommandLineAPI<T>::parse_command_line(int argc, char** argv, bool ignore_foreign)
 {
     static const auto help_info = R"(
         [ --<index>[=<value>] ] 临时修改参数值;只按首个'='切开,值内可再含'=': --vf=format=yuv420p,x=1
@@ -103,7 +109,9 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
     )";
 
     // clang-format off
-    static std::map<std::string, std::function<void(const std::string&)>> actions = {
+    // 注意: 不可加 static —— 下面的 lambda 以 [&] 捕获 this/argv,
+    // 静态化会把首次调用的 this/argv 固化下来, 导致多实例(多组件)时 show/help 作用到错误的树。
+    std::map<std::string, std::function<void(const std::string&)>> actions = {
         { "help",   [&](const std::string& s) { std::cout << "Usage: " << argv[0] << help_info << std::endl; exit(0); } },
         { "show",   [&](const std::string& s) { std::cout << "From " << sink_ << "\n" << tree_.debug_string(s) << std::endl; exit(0);} },
         { "create", [&](const std::string& s) { tree_.create(s); } },
@@ -165,6 +173,13 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv)
         }
 
         cmds.push_back({ cmd, args[++i] });
+    }
+
+    // 忽略不属于本树的 index: 其根段(首个 '.' 之前)与树 root 不一致。
+    // 多组件共享同一命令行时, 各组件只认领以自身名字为根的参数; help/save 无 index 恒保留,
+    // 省略 index 的 --show 也保留(展示本树整体结构)。
+    if (ignore_foreign) {
+        drop_foreign_cmds(cmds);
     }
 
     if (has_cmd(cmds, "help")) {
@@ -324,6 +339,28 @@ bool CommandLineAPI<T>::has_cmd(std::vector<std::pair<std::string, std::string>>
         }
     }
     return false;
+}
+
+template <typename T>
+void CommandLineAPI<T>::drop_foreign_cmds(std::vector<std::pair<std::string, std::string>>& cmds)
+{
+    const std::string root = tree_.root();
+    auto is_foreign = [&root](const std::string& index) {
+        if (index.empty()) {
+            return false;
+        }
+        const size_t dot = index.find('.');
+        const std::string head = (dot == std::string::npos) ? index : index.substr(0, dot);
+        return head != root;
+    };
+    // help/save/show/create/remove 的 index 在 second; 其余(参数修改)的 index 在 first
+    static const std::set<std::string> kNamedCmds { "help", "save", "show", "create", "remove" };
+    auto is_foreign_cmd = [&is_foreign](const std::pair<std::string, std::string>& cmd) {
+        const bool named_cmd = kNamedCmds.find(cmd.first) != kNamedCmds.end();
+        return is_foreign(named_cmd ? cmd.second : cmd.first);
+    };
+
+    cmds.erase(std::remove_if(cmds.begin(), cmds.end(), is_foreign_cmd), cmds.end());
 }
 
 template <typename T, typename... APIS>
