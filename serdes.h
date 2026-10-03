@@ -239,6 +239,15 @@ void CommandLineAPI<T>::load()
         throw SinkfileNoSpecified(" for load");
     }
 
+    // 文件不存在时 FileLock 的 O_CREAT 会把文件建空, 使下面的 fstream 成功打开空文件,
+    // 从而跳过 "缺失 → 由调用方 save 默认值" 的路径。故先探测存在性, 缺失即抛 BadFile。
+    {
+        std::ifstream probe(sink_);
+        if (!probe) {
+            throw BadFile("load " + sink_);
+        }
+    }
+
     FileLock lock(sink_, FileLock::READ_LOCK);
 
     std::fstream fin(sink_, std::ios::in);
