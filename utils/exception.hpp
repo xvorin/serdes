@@ -26,6 +26,7 @@ const char* const DUMP_TOML_ERROR = "dump toml error";
 const char* const DUMP_XML_ERROR = "dump xml error";
 
 const char* const VALUE_CHECK_ERROR = "value check error";
+const char* const INVALID_VALUE = "invalid value";
 const char* const TYPE_NOT_SUPPORT = "type not support";
 const char* const INDEX_DUPLICATE = "index duplicate while create";
 
@@ -183,6 +184,14 @@ private:
                 .append(ex.second.second);
         }
         return retval;
+    }
+};
+
+class InvalidValueException : public Exception {
+public:
+    InvalidValueException(const std::string& extension)
+        : Exception(error_msg::INVALID_VALUE, extension)
+    {
     }
 };
 

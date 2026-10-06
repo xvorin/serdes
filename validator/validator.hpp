@@ -3,6 +3,7 @@
 #include "serdes/types/traits.hpp"
 #include "serdes/utils/utils.hpp"
 
+#include <exception>
 #include <regex>
 
 namespace xvorin::serdes {
@@ -66,8 +67,14 @@ public:
                 continue;
             }
 
-            const T low_value = Converter<T>::from_string(low.substr(1));
-            const T high_value = Converter<T>::from_string(high.substr(0, high.size() - 1));
+            T low_value {};
+            T high_value {};
+            try {
+                low_value = Converter<T>::from_string(low.substr(1));
+                high_value = Converter<T>::from_string(high.substr(0, high.size() - 1));
+            } catch (const std::exception&) {
+                continue; // 区间边界无法解析, 跳过该区间
+            }
 
             if (low_value > high_value) {
                 continue;
@@ -117,7 +124,12 @@ public:
         utils::split(verinfo, limits, ",");
 
         for (auto& limit : limits) {
-            values_.insert(Converter<int>::from_string(limit));
+            try {
+                values_.insert(Converter<int>::from_string(limit));
+            } catch (const std::exception&) {
+                // 非法枚举值, 跳过
+                continue;
+            }
         }
     }
 

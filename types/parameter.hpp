@@ -92,8 +92,9 @@ public:
     /**
      * 只有复合类型需要实现以下子节点相关接口
      */
-    virtual void create_child(const std::string& newkey) { }
-    virtual void remove_child(const std::string& subkey) { }
+    virtual void create_child(const std::string& newkey) { throw TypeNotSupport(index() + "." + newkey); }
+    virtual void remove_child(const std::string& subkey) { throw TypeNotSupport(index() + "." + subkey); }
+
     virtual std::shared_ptr<Parameter> find_child(const std::string& subkey) const { return nullptr; }
     virtual const std::unordered_map<std::string, std::shared_ptr<Parameter>>& children() const
     {

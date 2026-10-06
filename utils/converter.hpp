@@ -30,13 +30,22 @@ struct Converter<T, typename std::enable_if<std::is_arithmetic<T>::value>::type>
     static T from_string(const std::string& s)
     {
         if (std::is_same<T, bool>::value) {
-            return (s == "true" || s == "True" || s == "1");
+            if (s == "true" || s == "True" || s == "1") {
+                return true;
+            }
+            if (s == "false" || s == "False" || s == "0") {
+                return false;
+            }
+            throw InvalidValueException(s);
         }
 
         std::stringstream ss;
         T t;
         ss << s;
         ss >> t;
+        if (ss.fail()) {
+            throw InvalidValueException(s);
+        }
         return t;
     }
 };
@@ -105,17 +114,15 @@ struct Converter<T, typename std::enable_if<std::is_enum<T>::value>::type> {
     static T from_string(const std::string& s)
     {
         auto proto = std::static_pointer_cast<TraitedParameter<T>>(ParameterPrototype::query_prototype(typeid(T)));
-        if (!proto) {
-            return static_cast<T>(0);
-        }
-
-        for (auto em : proto->enum_mapping) {
-            if (em.second == s) {
-                return em.first;
+        if (proto) {
+            for (auto em : proto->enum_mapping) {
+                if (em.second == s) {
+                    return em.first;
+                }
             }
         }
 
-        return static_cast<T>(0);
+        throw InvalidValueException(s);
     }
 };
 
