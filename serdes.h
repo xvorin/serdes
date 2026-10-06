@@ -19,7 +19,7 @@
 #endif
 
 #include "serdes/utils/file_lock.hpp"
-#include "serdes/utils/file_monite.hpp"
+#include "serdes/utils/file_monitor.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -61,7 +61,9 @@ public:
     /// @brief 设置参数持久化的配置文件
     /// @param sink 配置文件名称
     /// @param sink_type 配置文件格式
-    void set_sink_file(const std::string& sink, ParameterSerdesType sink_type = default_sink_type());
+    /// @param monitor 是否开启文件监控, 若有改动则自动重新加载配置
+    void set_sink_file(
+        const std::string& sink, ParameterSerdesType sink_type = default_sink_type(), bool enable_file_monitor = false);
 
     /// @brief 是否已经开启文件监控
     /// @return
@@ -93,7 +95,7 @@ private:
     ParameterSerdesType sink_type_;
     std::string sink_content_;
     std::mutex sink_content_lock_;
-    std::unique_ptr<FileMonite> monite_;
+    std::unique_ptr<FileMonitor> monitor_;
 };
 
 template <typename T>
@@ -214,7 +216,7 @@ void CommandLineAPI<T>::parse_command_line(int argc, char** argv, bool ignore_fo
 }
 
 template <typename T>
-void CommandLineAPI<T>::set_sink_file(const std::string& sink, ParameterSerdesType sink_type)
+void CommandLineAPI<T>::set_sink_file(const std::string& sink, ParameterSerdesType sink_type, bool enable_file_monitor)
 {
     sink_ = sink;
     sink_type_ = sink_type;
@@ -231,14 +233,17 @@ void CommandLineAPI<T>::set_sink_file(const std::string& sink, ParameterSerdesTy
     tree_.enable_inform(true);
 
     // 监控文件变更
-    monite_ = std::unique_ptr<FileMonite>(new FileMonite(sink_, std::bind(&CommandLineAPI::reload, this)));
-    monite_->start();
+
+    if (enable_file_monitor) {
+        monitor_ = std::unique_ptr<FileMonitor>(new FileMonitor(sink_, std::bind(&CommandLineAPI::reload, this)));
+        monitor_->start();
+    }
 }
 
 template <typename T>
 bool CommandLineAPI<T>::is_monitoring()
 {
-    return nullptr != monite_;
+    return nullptr != monitor_;
 }
 
 template <typename T>

@@ -17,11 +17,11 @@
 
 namespace xvorin::serdes {
 
-class FileMonite final {
-    using FileMoniteCallback = std::function<void()>;
+class FileMonitor final {
+    using FileMonitorCallback = std::function<void()>;
 
 public:
-    FileMonite(const std::string& file, FileMoniteCallback cb)
+    FileMonitor(const std::string& file, FileMonitorCallback cb)
         : cb_(std::move(cb))
     {
         auto dname = file;
@@ -35,10 +35,7 @@ public:
         }
     }
 
-    ~FileMonite()
-    {
-        stop();
-    }
+    ~FileMonitor() { stop(); }
 
     bool start()
     {
@@ -47,7 +44,7 @@ public:
         }
 
         switch_.store(true, std::memory_order_release);
-        thread_ = std::unique_ptr<std::thread>(new std::thread(&FileMonite::do_monite, this));
+        thread_ = std::unique_ptr<std::thread>(new std::thread(&FileMonitor::do_monitor, this));
         return true;
     }
 
@@ -92,7 +89,7 @@ private:
         return true;
     }
 
-    void do_monite()
+    void do_monitor()
     {
         fd_set fdset;
         char events[4096];
@@ -186,7 +183,6 @@ private:
     std::string directory_;
     std::string file_;
     std::unique_ptr<std::thread> thread_;
-    FileMoniteCallback cb_;
+    FileMonitorCallback cb_;
 };
-
 }
