@@ -1,5 +1,7 @@
 #include <serdes/serdes.h>
 
+#include <fstream>
+
 enum ExampleForEnum {
     E_ONE,
     E_TWO,
@@ -37,6 +39,21 @@ struct ExampleRoot {
     /// 支持STL(list/vector/map/unordered_map/set/unordered_set),支持STL的任意嵌套使用
     std::vector<std::string> v = { "Hello", "World", "!" };
     std::map<std::string, ExampleDerive> m = { { "A", { true, E_ONE } }, { "B", { false, E_TWO } } };
+};
+
+// 支持配置引用(subtree)
+// 被引用的子配置: 独立文件管理, 加载后作为子树挂入整体参数树
+struct ExampleCamera {
+    std::string name = "camera";
+    int width = 1280;
+    int height = 720;
+};
+
+struct ExampleRef {
+    int id = 0;
+
+    // 子配置引用: 外部格式(文件/命令行)中始终是路径字符串, 内容自动加载/写回
+    xvorin::serdes::subtree<ExampleCamera> camera;
 };
 
 void show(const std::string& key, const std::string content)
@@ -110,6 +127,27 @@ int main(int argc, char** argv)
     receiver->set_sink_file("./example.toml");
     receiver->save();
 
+    // 支持配置引用(subtree): 主配置只存子配置文件的路径, 子文件内容挂入同一棵参数树
+    // 更完整的用法(容器引用/内联对象/嵌套引用/变更监控)见 example/subtree.cpp
+    {
+        std::ofstream fout("./example_camera.json");
+        fout << R"({"name":"front","width":1920,"height":1080})";
+        fout.close();
+
+        auto app = xvorin::serdes::create<ExampleRef>("app");
+        app->from_json(R"({"id":1,"camera":"./example_camera.json"})"); // 路径 -> 加载子文件
+        show("subtree debug_string", app->debug_string());
+        show("subtree get", std::to_string(app->get<int>("app.camera.width")));
+
+        // 子树内的修改随 save 写回子配置文件(原子写), 主配置中仍是路径字符串
+        app->set("app.camera.width", "2560");
+        app->set_sink_file("./example_ref.json", xvorin::serdes::ParameterSerdesType::PST_JSON);
+        app->save();
+        show("subtree to_json", app->to_json());
+        app->enable_subtree_inline(true);
+        show("subtree inline to_json", app->to_json());
+    }
+
     // 通过命令行操作数据结构
     receiver->parse_command_line(argc, argv);
 }
@@ -130,3 +168,11 @@ DEFINE_PARAM(ExampleRoot, buffer, "非可打印数据")
 DEFINE_PARAM(ExampleRoot, envar, "环境变量")
 DEFINE_PARAM(ExampleRoot, v, "std::vector示例")
 DEFINE_PARAM(ExampleRoot, m, "std::map示例")
+
+// subtree: 子配置及其引用处同样非侵入注册
+DEFINE_PARAM(ExampleCamera, name, "相机名")
+DEFINE_PARAM(ExampleCamera, width, "图像宽")
+DEFINE_PARAM(ExampleCamera, height, "图像高")
+
+DEFINE_PARAM(ExampleRef, id, "应用id")
+DEFINE_PARAM(ExampleRef, camera, "相机子配置引用")

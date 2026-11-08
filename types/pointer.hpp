@@ -1,5 +1,6 @@
 #pragma once
 
+#include "serdes/serdes/multi_serdes.hpp"
 #include "serdes/types/parameter.hpp"
 #include "serdes/types/traits.hpp"
 

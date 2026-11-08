@@ -137,6 +137,8 @@ DEFINE_PARAM(ExampleRoot, v, "std::vector示例")
 DEFINE_PARAM(ExampleRoot, m, "std::map示例")
 ```
 
+上面是最基础的互转用法，配置引用(subtree)见下文「配置引用」。
+
 # 示例输出
 ```
 ***************debug_string(sender)***************
@@ -330,3 +332,105 @@ a6ac16dc2c804352d20c57590795d04d  extest1.yaml
 136d4f02ad270ff2f5d82e981513b1d4  extest2.toml
 a6ac16dc2c804352d20c57590795d04d  extest2.yaml
 ```
+
+# 配置引用(subtree)
+
+主配置中只保存子配置文件的路径，加载时把子文件内容作为子树挂入同一棵参数树，读写方式与普通成员完全一致；
+`save()` 时子树内容按各自格式原子写回子文件，主配置中仍是路径字符串。
+
+- 子文件格式按扩展名推断(json/yaml/toml/xml)，可与主文件格式不同；无扩展名时回退主格式
+- 成员值直接写对象则视为内联配置，不读文件
+- 支持容器引用(`std::vector`/`std::map` 内同样可用)
+- 支持嵌套引用(子配置里可再引用子配置)，逐层加载/写回
+- 路径中支持环境变量(`${VAR}`)
+- `enable_subtree_monitor()` 后可监听子文件变更并自动重载
+- `enable_subtree_inline(true)` 后 `to_json()` 等输出子树内容而非路径
+
+```
+#include <fstream>
+
+// 被引用的子配置: 独立文件管理, 加载后作为子树挂入整体参数树
+struct ExampleCamera {
+    std::string name = "camera";
+    int width = 1280;
+    int height = 720;
+};
+
+struct ExampleRef {
+    int id = 0;
+
+    // 子配置引用: 外部格式(文件/命令行)中始终是路径字符串, 内容自动加载/写回
+    xvorin::serdes::subtree<ExampleCamera> camera;
+};
+
+int main()
+{
+    // 子配置文件(格式与主文件无关, 按扩展名推断)
+    std::ofstream fout("./example_camera.json");
+    fout << R"({"name":"front","width":1920,"height":1080})";
+    fout.close();
+
+    // 主配置加载: camera 的值是路径 -> 子文件内容挂入参数树
+    auto app = xvorin::serdes::create<ExampleRef>("app");
+    app->from_json(R"({"id":1,"camera":"./example_camera.json"})");
+    show("subtree debug_string", app->debug_string()); // show() 定义见上例
+
+    // 子树与普通成员一样读改写, index 直接穿透进去
+    show("subtree get", std::to_string(app->get<int>("app.camera.width")));
+
+    // 子树内的修改随 save 写回子配置文件(原子写), 主配置中仍是路径字符串
+    app->set("app.camera.width", "2560");
+    app->set_sink_file("./example_ref.json", xvorin::serdes::ParameterSerdesType::PST_JSON);
+    app->save();
+    show("subtree to_json", app->to_json());
+
+    // 开启内联输出: to_json 输出子树内容(对象)而非路径
+    app->enable_subtree_inline(true);
+    show("subtree inline to_json", app->to_json());
+}
+
+// 子配置及其引用处同样非侵入注册
+DEFINE_PARAM(ExampleCamera, name, "相机名")
+DEFINE_PARAM(ExampleCamera, width, "图像宽")
+DEFINE_PARAM(ExampleCamera, height, "图像高")
+
+DEFINE_PARAM(ExampleRef, id, "应用id")
+DEFINE_PARAM(ExampleRef, camera, "相机子配置引用")
+```
+
+# 配置引用示例输出
+```
+***************subtree debug_string***************
+|app size = 2 [ExampleRef]
+| |app.id = 1 [int] #应用id
+| |app.camera size = 3 path = ./example_camera.json [xvorin::serdes::subtree<ExampleCamera>] #相机子配置引用
+| | |app.camera.name = front [std::string] #相机名
+| | |app.camera.width = 1920 [int] #图像宽
+| | |app.camera.height = 1080 [int] #图像高
+***************subtree get***************
+1920
+***************subtree to_json***************
+{
+    "id": 1,
+    "camera": "./example_camera.json"
+}
+***************subtree inline to_json***************
+{
+    "id": 1,
+    "camera": {
+        "name": "front",
+        "width": 2560,
+        "height": 1080
+    }
+}
+```
+
+写回后 `./example_camera.json` 内容为:
+```
+{
+    "height": 1080,
+    "width": 2560,
+    "name": "front"
+}
+```
+完整用法(容器引用/内联对象/嵌套引用/各格式子文件/变更监控)见 `example/subtree.cpp`。

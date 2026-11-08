@@ -88,15 +88,14 @@ class JsonSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public S
     }
 };
 
-// OBJECT
+// OBJECT: 按成员名写出/合并子成员(纯内容; subtree 的内容也走这里)
 template <typename T>
 class JsonSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public Serdes {
+public:
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
-        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
-
-        for (const auto& child : parameter->sorted_children()) {
+        for (const auto& child : p->sorted_children()) {
             nlohmann::ordered_json& jchild = jout[child->subkey];
             child->serialize(&jchild);
         }
@@ -104,22 +103,53 @@ class JsonSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
-        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
         if (jin.is_null()) {
             return;
         }
 
-        for (const auto& child_pair : parameter->children()) {
+        // 只认领与已注册子节点同名的 key
+        for (const auto& child_pair : p->children()) {
             const auto& child = child_pair.second;
-
-            if (jin.find(child->subkey) == jin.end()) {
-                continue;
+            auto iter = jin.find(child->subkey);
+            if (iter != jin.end()) {
+                child->deserialize(&(*iter));
             }
-
-            const auto& jchild = jin[child->subkey];
-            child->deserialize(&jchild);
         }
+    }
+};
+
+// BASIC-subtree: 外层是路径字符串(或内联对象); 内容部分复用上面的对象实现
+template <typename T>
+class JsonSerdes<T, typename std::enable_if<is_subtree<T>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& jout = (*static_cast<nlohmann::ordered_json*>(out));
+        if (!parameter->profile()->subtree_inline) {
+            if (parameter->profile()->subtree_sink) { // 保存主配置时顺带落盘
+                parameter->save(parameter->profile()->serdes_type);
+            }
+            jout = parameter->path; // 默认: 输出路径字符串
+            return;
+        }
+
+        JsonSerdes<typename T::value_type> content; // 内联模式: 输出子树内容对象
+        content.serialize(p, out);
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& jin = (*static_cast<const nlohmann::ordered_json*>(in));
+        if (jin.is_string()) { // 路径: 加载文件内容, 合并到子树
+            parameter->path = jin.get<std::string>();
+            parameter->load(ParameterSerdesType::PST_JSON);
+            return;
+        }
+
+        JsonSerdes<typename T::value_type> content; // 内联对象: 直接作为子树, path 保持原值
+        content.deserialize(p, in);
     }
 };
 
@@ -266,5 +296,29 @@ private:
         }
     }
 };
+
+
+// ---- 文本 <-> DOM(供 api 与子树内容读写共用) ----
+namespace json {
+
+inline nlohmann::ordered_json parse(const std::string& text)
+{
+    try {
+        return nlohmann::ordered_json::parse(text);
+    } catch (const std::exception& e) {
+        throw ParseJsonException(e.what());
+    }
+}
+
+inline std::string dump(const nlohmann::ordered_json& dom, int indent = 4)
+{
+    try {
+        return indent > 0 ? dom.dump(indent) : dom.dump();
+    } catch (const std::exception& e) {
+        throw DumpJsonException(e.what());
+    }
+}
+
+}
 
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "serdes/serdes/serdes.hpp"
+#include "serdes/serdes/xml/xml_util.hpp"
 #include "serdes/types/traits.hpp"
 #include "serdes/utils/converter.hpp"
 
@@ -13,68 +14,6 @@
 #include <sstream>
 
 namespace xvorin::serdes {
-
-// XML映射规则:
-//   元素名 = 参数subkey(可作合法XML标签名时); 否则标签名用param并以name属性记录原始subkey
-//   基础/枚举/buffer/envar类型 = 元素文本; OBJECT/MAP = 子元素; SEQUENCE/SET = <item>子元素
-//   参数comment = XML注释节点(挂接在元素之前, 与toml的"#注释"行风格一致)
-//   反序列化时pugixml默认跳过注释, 注释始终来自参数注册信息
-
-// 判断字符串能否直接作为XML元素名: 首字符为字母/下划线/冒号, 其余为字母/数字/下划线/冒号/点/横线
-inline bool xml_valid_name(const std::string& name)
-{
-    if (name.empty()) {
-        return false;
-    }
-
-    const auto head_ok = std::isalpha(static_cast<unsigned char>(name[0])) || name[0] == '_' || name[0] == ':';
-    if (!head_ok) {
-        return false;
-    }
-
-    for (size_t i = 1; i < name.size(); i++) {
-        const auto ok = std::isalnum(static_cast<unsigned char>(name[i])) || name[i] == '_' || name[i] == ':' || name[i] == '.' || name[i] == '-';
-        if (!ok) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-// 读取元素对应的subkey: 优先取name属性(非法标签名时的兜底), 否则取标签名
-inline std::string xml_subkey_of(const pugi::xml_node& node)
-{
-    const auto name = node.attribute("name");
-    return name ? name.as_string() : node.name();
-}
-
-// 挂接子元素: subkey合法时直接作标签名, 否则用固定标签param + name属性记录原始subkey
-inline pugi::xml_node xml_append_element(pugi::xml_node& parent, const std::string& subkey)
-{
-    if (xml_valid_name(subkey)) {
-        return parent.append_child(subkey.c_str());
-    }
-
-    auto child = parent.append_child("param");
-    child.append_attribute("name").set_value(subkey.c_str());
-    return child;
-}
-
-// 将注释挂接到元素之前(与toml的"#注释"行风格一致); 根元素无父节点时挂接为其子节点
-inline void xml_set_comment(pugi::xml_node& node, const std::string& comment)
-{
-    if (comment.empty()) {
-        return;
-    }
-
-    auto parent = node.parent();
-    if (parent) {
-        parent.insert_child_before(pugi::node_comment, node).set_value(comment.c_str());
-    } else {
-        node.append_child(pugi::node_comment).set_value(comment.c_str());
-    }
-}
 
 // ---- 数值/文本转换 ----
 
@@ -94,7 +33,7 @@ inline std::string xml_float_to_text(T v)
         std::stringstream ss;
         ss << std::setprecision(prec) << v;
 
-        T back { };
+        T back {};
         std::stringstream in(ss.str());
         if ((in >> back) && back == v) {
             return ss.str();
@@ -144,7 +83,7 @@ inline void xml_from_text(std::string& out, const std::string& s)
 // char/int8_t/uint8_t按整数解析, 避免流提取按单字符读取
 inline void xml_from_text(char& out, const std::string& s)
 {
-    long long tmp { };
+    long long tmp {};
     std::stringstream ss;
     ss << s;
     if (ss >> tmp) {
@@ -154,7 +93,7 @@ inline void xml_from_text(char& out, const std::string& s)
 
 inline void xml_from_text(signed char& out, const std::string& s)
 {
-    long long tmp { };
+    long long tmp {};
     std::stringstream ss;
     ss << s;
     if (ss >> tmp) {
@@ -164,7 +103,7 @@ inline void xml_from_text(signed char& out, const std::string& s)
 
 inline void xml_from_text(unsigned char& out, const std::string& s)
 {
-    long long tmp { };
+    long long tmp {};
     std::stringstream ss;
     ss << s;
     if (ss >> tmp) {
@@ -176,7 +115,7 @@ inline void xml_from_text(unsigned char& out, const std::string& s)
 template <typename T>
 inline void xml_from_text(T& out, const std::string& s)
 {
-    T tmp { };
+    T tmp {};
     std::stringstream ss;
     ss << s;
     if (ss >> tmp) {
@@ -268,17 +207,16 @@ class XmlSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public Se
     }
 };
 
-// OBJECT
+// OBJECT(含 subtree 节点: 默认元素文本为引用路径, subtree_inline 时输出子树子元素)
+// OBJECT: 按成员名写出/合并子成员(纯内容; subtree 的内容也走这里)
 template <typename T>
 class XmlSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public Serdes {
+public:
     virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
     {
-        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& xout = (*static_cast<pugi::xml_node*>(out));
-
-        xml_set_comment(xout, parameter->comment);
-
-        for (const auto& child : parameter->sorted_children()) {
+        xml_set_comment(xout, p->comment);
+        for (const auto& child : p->sorted_children()) {
             auto xchild = xml_append_element(xout, child->subkey);
             child->serialize(&xchild);
         }
@@ -286,10 +224,10 @@ class XmlSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public 
 
     virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
     {
-        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
         auto& xin = (*static_cast<const pugi::xml_node*>(in));
 
-        const auto& children = parameter->children();
+        // 只认领与已注册子节点同名的元素
+        const auto& children = p->children();
         for (auto xchild = xin.first_child(); xchild; xchild = xchild.next_sibling()) {
             if (xchild.type() != pugi::node_element) {
                 continue;
@@ -300,6 +238,42 @@ class XmlSerdes<T, typename std::enable_if<is_object<T>::value>::type> : public 
                 iter->second->deserialize(&xchild);
             }
         }
+    }
+};
+
+// BASIC-subtree: 外层是路径字符串(或内联对象); 内容部分复用上面的对象实现
+template <typename T>
+class XmlSerdes<T, typename std::enable_if<is_subtree<T>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& xout = (*static_cast<pugi::xml_node*>(out));
+        if (!parameter->profile()->subtree_inline) {
+            if (parameter->profile()->subtree_sink) { // 保存主配置时顺带落盘
+                parameter->save(parameter->profile()->serdes_type);
+            }
+            xout.text() = parameter->path.c_str(); // 默认: 输出路径字符串
+            xml_set_comment(xout, parameter->comment);
+            return;
+        }
+
+        XmlSerdes<typename T::value_type> content; // 内联模式: 输出子树子元素(含注释)
+        content.serialize(p, out);
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& xin = (*static_cast<const pugi::xml_node*>(in));
+        const auto text = std::string(xin.text().as_string());
+        if (!text.empty()) { // 路径: 加载文件内容, 合并到子树
+            parameter->path = text;
+            parameter->load(ParameterSerdesType::PST_XML); // 文件根元素下的子元素即配置各 key
+            return;
+        }
+
+        XmlSerdes<typename T::value_type> content; // 内联对象: 直接作为子树, path 保持原值
+        content.deserialize(p, in);
     }
 };
 
@@ -442,5 +416,37 @@ private:
         }
     }
 };
+
+
+// ---- 文本 <-> DOM(供 api 与子树内容读写共用) ----
+namespace xml {
+
+inline pugi::xml_document parse(const std::string& text)
+{
+    pugi::xml_document doc;
+    const auto result = doc.load_string(text.c_str());
+    if (!result) {
+        throw ParseXmlException(result.description());
+    }
+    if (!doc.document_element()) { // XML 要求唯一根元素
+        throw ParseXmlException("no root element");
+    }
+    return doc;
+}
+
+inline std::string dump(const pugi::xml_document& dom, int indent = 4)
+{
+    try {
+        std::stringstream ss;
+        const auto flags = indent > 0 ? pugi::format_indent : pugi::format_raw;
+        const auto indent_str = indent > 0 ? std::string(static_cast<size_t>(indent), ' ') : std::string();
+        dom.save(ss, indent_str.c_str(), flags);
+        return ss.str();
+    } catch (const std::exception& e) {
+        throw DumpXmlException(e.what());
+    }
+}
+
+}
 
 }

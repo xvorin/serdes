@@ -1,10 +1,5 @@
+#include "serdes/serdes/yaml/yaml_util.hpp"
 #include "serdes/types/parameter_tree.hpp"
-
-#include <serdes/3rd/fkYAML/node.hpp>
-
-namespace fkyaml {
-using ordered_node = basic_node<std::vector, fkyaml::ordered_map>;
-}
 
 namespace xvorin::serdes {
 
@@ -51,12 +46,7 @@ void YamlAPI<T>::from_yaml(const std::string& s, T* value)
 template <typename T>
 void YamlAPI<T>::from_yaml(const std::string& index, const std::string& s, T* value)
 {
-    fkyaml::ordered_node yin;
-    try {
-        yin = fkyaml::ordered_node::deserialize(s);
-    } catch (std::exception& e) {
-        throw ParseYamlException(e.what());
-    }
+    fkyaml::ordered_node yin = yaml::parse(s);
 
     tree_.deserialize(tree_.parameter(index), &yin, ParameterSerdesType::PST_YAML);
     tree_.commit_model_changes(value);
@@ -76,14 +66,7 @@ std::string YamlAPI<T>::to_yaml(const std::string& index)
     fkyaml::ordered_node yout;
     tree_.serialize(tree_.parameter(index), &yout, ParameterSerdesType::PST_YAML);
 
-    std::stringstream ss;
-    try {
-        ss << yout;
-    } catch (std::exception& e) {
-        throw DumpYamlException(e.what());
-    }
-
-    return ss.str();
+    return yaml::dump(yout);
 }
 
 template <typename T>
@@ -100,13 +83,6 @@ std::string YamlAPI<T>::to_yaml(const T& value, const std::string& index)
     fkyaml::ordered_node yout;
     tree_.serialize(tree_.parameter(index), &yout, ParameterSerdesType::PST_YAML);
 
-    std::stringstream ss;
-    try {
-        ss << yout;
-    } catch (std::exception& e) {
-        throw DumpYamlException(e.what());
-    }
-
-    return ss.str();
+    return yaml::dump(yout);
 }
 }

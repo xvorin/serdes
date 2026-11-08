@@ -1,5 +1,6 @@
 #pragma once
 
+#include "serdes/types/extension/buffer.hpp"
 #include "serdes/utils/base64.hpp"
 #include "serdes/utils/utils.hpp"
 

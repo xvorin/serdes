@@ -19,6 +19,8 @@ const char* const PARSE_JSON_ERROR = "parse json error";
 const char* const PARSE_YAML_ERROR = "parse yaml error";
 const char* const PARSE_TOML_ERROR = "parse toml error";
 const char* const PARSE_XML_ERROR = "parse xml error";
+const char* const PARSE_PBBIN_ERROR = "parse protobuf binary error";
+const char* const PARSE_PBTXT_ERROR = "parse protobuf text error";
 
 const char* const DUMP_JSON_ERROR = "dump json error";
 const char* const DUMP_YAML_ERROR = "dump yaml error";
@@ -100,6 +102,16 @@ public:
     }
 };
 
+// 主载体(顶层配置)不存在/无内容; 与"子文件/嵌套引用缺失"区分开, 上层据此决定是否写默认值。
+// 仍派生自 BadFile, 保持既有的 catch(BadFile) 兼容。
+class SinkfileMissing : public BadFile {
+public:
+    explicit SinkfileMissing(const std::string& file)
+        : BadFile(file)
+    {
+    }
+};
+
 class ParseJsonException : public Exception {
 public:
     ParseJsonException(const std::string& extension)
@@ -128,6 +140,23 @@ class ParseXmlException : public Exception {
 public:
     ParseXmlException(const std::string& extension)
         : Exception(error_msg::PARSE_XML_ERROR, extension)
+    {
+    }
+};
+
+// protobuf 两种落盘格式分开报错: 便于定位是二进制还是文本子文件损坏
+class ParsePbbinException : public Exception {
+public:
+    ParsePbbinException(const std::string& extension)
+        : Exception(error_msg::PARSE_PBBIN_ERROR, extension)
+    {
+    }
+};
+
+class ParsePbtxtException : public Exception {
+public:
+    ParsePbtxtException(const std::string& extension)
+        : Exception(error_msg::PARSE_PBTXT_ERROR, extension)
     {
     }
 };

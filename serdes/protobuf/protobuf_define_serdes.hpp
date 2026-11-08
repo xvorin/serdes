@@ -5,10 +5,9 @@
 #include "serdes/types/traits.hpp"
 
 #include <algorithm>
+#include <iostream>
 #include <map>
 #include <stack>
-
-#include <iostream>
 
 namespace xvorin::serdes {
 
@@ -26,7 +25,8 @@ struct ProtobufDefineSerdesContext {
     std::string to_string(const std::string& pkg = "")
     {
         std::stringstream ss;
-        ss << "syntax = " << R"("proto3";)" << std::endl;
+        ss << "syntax = "
+           << R"("proto3";)" << std::endl;
 
         if (!pkg.empty()) {
             ss << "package " << pkg << ";" << std::endl;
@@ -117,6 +117,49 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_basic<T>::value>::type>
     }
 };
 
+// subtree: 默认生成 string 字段(路径); subtree_inline 开启时生成 C 的嵌套 message(子树内容对象)
+template <typename T>
+class ProtobufDefineSerdes<T, typename std::enable_if<is_subtree<T>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        if (!parameter->profile()->subtree_inline) { // 默认: string 字段(路径)
+            if (parameter->profile()->subtree_sink) { // 保存主配置时顺带落盘
+                parameter->save(parameter->profile()->serdes_type);
+            }
+            auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
+            auto& parent = *(ctx.parent_message_content());
+            parent[parameter->offset].type = detail::Pbtraits<T>::type();
+            parent[parameter->offset].name = parameter->subkey;
+            return;
+        }
+
+        // inline: 字段类型 = C 的 message 名, 并生成 C 的 message 定义(与 object 分支同构)
+        const auto type_name = detail::subtree_message_name<T>();
+        auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
+        auto parent = ctx.parent_message_content();
+        const auto message = ctx.parent_message();
+
+        // 作为容器元素时父消息为 __internal_anonymous_message__, 字段已由容器分支挂接, 此处只生成 C 定义
+        if (parent != nullptr && message != "__internal_anonymous_message__") {
+            (*parent)[parameter->offset].type = type_name;
+            (*parent)[parameter->offset].name = parameter->subkey;
+        }
+
+        if (!ctx.contains(type_name)) {
+            detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
+            for (auto& child : parameter->sorted_children()) {
+                child->serialize(out);
+            }
+        }
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        // do nothing
+    }
+};
+
 // ENUM
 template <typename T>
 class ProtobufDefineSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public Serdes {
@@ -188,13 +231,16 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_sequence<T>::value || i
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto& parent = *(ctx.parent_message_content());
 
-        const std::string child_type_name = detail::Pbtraits<typename T::value_type>::type();
+        const bool subtree_inline = is_subtree<typename T::value_type>::value && p->profile()->subtree_inline;
+        const std::string child_type_name = subtree_inline
+            ? detail::subtree_message_name<typename T::value_type>()
+            : detail::Pbtraits<typename T::value_type>::type();
         const std::string child_value_name = detail::Pbtraits<typename T::value_type>::value();
 
         parent[parameter->offset].type = "repeated " + child_type_name;
         parent[parameter->offset].name = parameter->subkey;
 
-        if (is_basic<typename T::value_type>::value) { // 子类型为基本类型
+        if (is_basic<typename T::value_type>::value || (is_subtree<typename T::value_type>::value && !subtree_inline)) { // 基本类型(或非inline的subtree)按字符串
             return;
         }
 
@@ -203,7 +249,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_sequence<T>::value || i
         //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
         auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name, std::const_pointer_cast<Parameter>(p));
         {
-            const bool anonymous = (is_object<typename T::value_type>::value || is_enum<typename T::value_type>::value);
+            const bool anonymous = (is_object<typename T::value_type>::value || is_enum<typename T::value_type>::value || subtree_inline);
             const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
             detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
             child->serialize(out);
@@ -227,13 +273,16 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
 
         const bool str_as_key = (detail::Pbtraits<typename T::key_type>::type() == "bytes" || is_enum<typename T::key_type>::value);
         const std::string mapkey_type_name = str_as_key ? "string" : detail::Pbtraits<typename T::key_type>::type();
-        const std::string child_type_name = detail::Pbtraits<typename T::mapped_type>::type();
+        const bool subtree_inline = is_subtree<typename T::mapped_type>::value && p->profile()->subtree_inline;
+        const std::string child_type_name = subtree_inline
+            ? detail::subtree_message_name<typename T::mapped_type>()
+            : detail::Pbtraits<typename T::mapped_type>::type();
         const std::string child_value_name = detail::Pbtraits<typename T::mapped_type>::value();
 
         parent[parameter->offset].type = "map<" + mapkey_type_name + ", " + child_type_name + ">";
         parent[parameter->offset].name = parameter->subkey;
 
-        if (is_basic<typename T::mapped_type>::value) { // 子类型为基本类型
+        if (is_basic<typename T::mapped_type>::value || (is_subtree<typename T::mapped_type>::value && !subtree_inline)) { // 基本类型(或非inline的subtree)按字符串
             return;
         }
 
@@ -242,7 +291,7 @@ class ProtobufDefineSerdes<T, typename std::enable_if<is_map<T>::value>::type> :
         //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
         auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name, std::const_pointer_cast<Parameter>(p));
         {
-            const bool anonymous = (is_object<typename T::mapped_type>::value || is_enum<typename T::mapped_type>::value);
+            const bool anonymous = (is_object<typename T::mapped_type>::value || is_enum<typename T::mapped_type>::value || subtree_inline);
             const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
             detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
             child->serialize(out);
@@ -266,13 +315,16 @@ private:
         auto& ctx = *static_cast<detail::ProtobufDefineSerdesContext*>(out);
         auto& parent = *(ctx.parent_message_content());
 
-        const std::string child_type_name = detail::Pbtraits<typename T::element_type>::type();
+        const bool subtree_inline = is_subtree<typename T::element_type>::value && p->profile()->subtree_inline;
+        const std::string child_type_name = subtree_inline
+            ? detail::subtree_message_name<typename T::element_type>()
+            : detail::Pbtraits<typename T::element_type>::type();
         const std::string child_value_name = detail::Pbtraits<typename T::element_type>::value();
 
         parent[parameter->offset].type = child_type_name;
         parent[parameter->offset].name = parameter->subkey;
 
-        if (is_basic<typename T::element_type>::value) { // 子类型为基本类型
+        if (is_basic<typename T::element_type>::value || (is_subtree<typename T::element_type>::value && !subtree_inline)) { // 基本类型(或非inline的subtree)按字符串
             return;
         }
 
@@ -281,7 +333,7 @@ private:
         //    对于子类型为 STL的   另行建立的message需要内部生成一个internal_type_name(包装消息), 因为protobuf 不支持连续的repeated定义, 类似: repeated repeated ... int
         auto child = ParameterPrototype::create_parameter(parameter->detail, child_value_name, std::const_pointer_cast<Parameter>(p));
         {
-            const bool anonymous = (is_object<typename T::element_type>::value || is_enum<typename T::element_type>::value);
+            const bool anonymous = (is_object<typename T::element_type>::value || is_enum<typename T::element_type>::value || subtree_inline);
             const auto type_name = anonymous ? "__internal_anonymous_message__" : child_type_name;
             detail::EnterProtobufDefineMessageGuard guard(ctx, type_name);
             child->serialize(out);

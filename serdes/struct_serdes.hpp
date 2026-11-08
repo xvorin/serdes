@@ -146,6 +146,36 @@ class StructSerdes<T, typename std::enable_if<is_object<T>::value>::type> : publ
     }
 };
 
+// CONFIG_REF: 引用路径回写结构体, 加载后的内容与结构体内置缓存双向同步
+template <typename T>
+class StructSerdes<T, typename std::enable_if<is_subtree<T>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        auto& sout = *reinterpret_cast<T*>(out);
+        sout._subtree_sink_path_ = parameter->path;
+        // 子参数偏移相对被引用配置类型(T::value_type)计算, 取该基类子对象
+        auto& svalue = static_cast<typename T::value_type&>(sout);
+        for (const auto& child_pair : parameter->children()) {
+            const auto& child = child_pair.second;
+            child->serialize(reinterpret_cast<char*>(&svalue) + child->offset);
+        }
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        auto& sin = *reinterpret_cast<const T*>(in);
+        parameter->path = sin._subtree_sink_path_;
+        // 子参数偏移相对被引用配置类型(T::value_type)计算, 取该基类子对象
+        const auto& svalue = static_cast<const typename T::value_type&>(sin);
+        for (auto& child_pair : (*parameter->mutable_children())) {
+            auto& child = child_pair.second;
+            child->deserialize(reinterpret_cast<const char*>(&svalue) + child->offset);
+        }
+    }
+};
+
 // SEQUENCE
 template <typename T>
 class StructSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : public Serdes {

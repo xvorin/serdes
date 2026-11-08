@@ -19,10 +19,17 @@ message(STATUS "System: ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_VERSION}")
 message(STATUS "Install: ${CMAKE_INSTALL_PREFIX}")
 
 option(BUILD_EXAMPLES "Build the example programs" OFF)
+option(BUILD_TESTS "Build the unit tests" OFF)
 
 if(BUILD_EXAMPLES)
     message(STATUS "Building example")
     add_subdirectory(example)
+endif()
+
+if(BUILD_TESTS)
+    message(STATUS "Building tests")
+    enable_testing()
+    add_subdirectory(test)
 endif()
 
 install(DIRECTORY types serdes validator utils DESTINATION include/serdes)

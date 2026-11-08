@@ -3,12 +3,21 @@
 #include "serdes/types/registrar.hpp"
 
 #include <fstream>
+#include <functional>
 #include <iostream>
+#include <list>
 #include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <stdio.h>
 
 namespace xvorin::serdes {
+
+template <typename U>
+class CommandLineAPI;
 
 template <typename T>
 class ParameterTree {
@@ -118,6 +127,33 @@ public:
     void enable_inform(bool enable = true);
 
     /**
+     * 使能/关闭 subtree 内联输出: true 时 to_xxx 将 subtree 内容以对象形式输出(替代路径字符串);
+     * 仅影响 json/yaml/toml/xml 文本后端, protobuf 恒输出路径字符串
+     */
+    void enable_subtree_inline(bool enable = true);
+
+    /**
+     * 当前 subtree 内联输出开关(序列化闸门内读取, 供 protobuf 预生成 schema 用)
+     */
+    bool subtree_inline() const;
+
+    /**
+     * 线程安全的 subtree 重载入口(由文件监控回调调用): 树锁内按节点当前 path 重载内容,
+     * 再同步回 value_ 缓存; type 为无扩展名子文件时的回退格式
+     */
+    void reload_subtree(const std::string& index, ParameterSerdesType type);
+
+    /**
+     * 树内全部 subtree 节点的索引(树锁内遍历, 供批量开启/关闭监控)
+     */
+    std::vector<std::string> subtree_indices();
+
+    /**
+     * 在树锁保护下访问 subtree 节点(读取 path/注入载体等), 非 subtree 或不存在返回 false
+     */
+    bool visit_subtree(const std::string& index, const std::function<void(Subtree&)>& visitor);
+
+    /**
      * for debug
      */
     std::string debug_string(const std::string& index = "");
@@ -129,7 +165,16 @@ private:
 private:
     T value_;
     std::shared_ptr<Parameter> model_;
-    std::mutex lock_;
+    std::mutex lock_; // 数据锁: 保护 model_/value_/profile
+    mutable std::recursive_mutex serialize_lock_; // 序列化闸门: serialize/deserialize 互斥, 并保护 subtree_sink 标志窗口
+
+protected:
+    /// @brief 获取序列化闸门(供 CommandLineAPI::save 持闸门设置 subtree_sink); 同线程可重入
+    std::unique_lock<std::recursive_mutex> lock()
+    {
+        return std::unique_lock<std::recursive_mutex>(serialize_lock_);
+    }
+    friend class CommandLineAPI<T>;
 
 private:
     ParameterTree(const ParameterTree&) = delete;
@@ -150,14 +195,10 @@ ParameterTree<T>::ParameterTree(const std::string& root)
     model->init_profile();
     model_ = model;
 
-    // 合法性自检
-    try {
-        commit_value_changes();
-        commit_model_changes();
-    } catch (const std::exception& e) {
-        std::cerr << "Default parameter value fail the legality check!" << e.what() << std::endl;
-        exit(-1);
-    }
+    // 合法性自检: 默认值不满足校验(verinfo)时抛异常(如 ViolationException), 由调用方决定终止/降级;
+    // 不做 exit, 与库内异常习惯一致, 避免跳过析构与不可恢复的进程退出
+    commit_value_changes();
+    commit_model_changes();
 }
 
 template <typename T>
@@ -195,6 +236,7 @@ void ParameterTree<T>::serialize(std::shared_ptr<const Parameter> p, void* ptr, 
 {
     std::unordered_map<std::string, std::string> violations;
     {
+        std::lock_guard<std::recursive_mutex> gate(serialize_lock_); // 序列化闸门
         std::lock_guard<std::mutex> guard(lock_);
         model_->profile()->serdes_type = type;
         model_->profile()->violations.clear();
@@ -205,7 +247,8 @@ void ParameterTree<T>::serialize(std::shared_ptr<const Parameter> p, void* ptr, 
     std::unordered_map<std::string, std::pair<std::string, std::string>> exceptions;
     for (auto& violation : violations) {
         const auto index = violation.first;
-        const auto info = parameter(parse_index(index))->debug_releation();
+        auto vp = parameter(parse_index(index)); // 并发 remove 后可能为空, 不能直接解引用
+        const auto info = vp ? vp->debug_releation() : std::string();
         exceptions[index] = std::make_pair(violation.second, info);
     }
 
@@ -217,6 +260,7 @@ void ParameterTree<T>::serialize(std::shared_ptr<const Parameter> p, void* ptr, 
 template <typename T>
 void ParameterTree<T>::deserialize(std::shared_ptr<Parameter> p, const void* ptr, ParameterSerdesType type)
 {
+    std::lock_guard<std::recursive_mutex> gate(serialize_lock_); // 序列化闸门
     std::lock_guard<std::mutex> guard(lock_);
     model_->profile()->serdes_type = type;
     p->deserialize(ptr);
@@ -294,7 +338,12 @@ template <typename V>
 V ParameterTree<T>::get(const std::string& index)
 {
     static_assert(is_basic<V>::value || is_enum<V>::value, "set<>() only support basic/enum type");
-    return static_cast<V>(parameter<V>(index)->value);
+    std::lock_guard<std::mutex> guard(lock_);
+    auto p = std::dynamic_pointer_cast<TraitedParameter<V>>(parameter(parse_index(index)));
+    if (!p) {
+        throw ParameterNotFound(index);
+    }
+    return static_cast<V>(p->value);
 }
 
 template <typename T>
@@ -302,14 +351,28 @@ template <typename V>
 void ParameterTree<T>::set(const std::string& index, const V& value)
 {
     static_assert(is_basic<V>::value || is_enum<V>::value, "set<>() only support basic/enum type");
-    const_cast<V&>(parameter<V>(index)->value) = value;
+    {
+        std::lock_guard<std::mutex> guard(lock_);
+        auto p = std::dynamic_pointer_cast<TraitedParameter<V>>(parameter(parse_index(index)));
+        if (!p) {
+            throw ParameterNotFound(index);
+        }
+        const_cast<V&>(p->value) = value;
+    }
     commit_model_changes();
 }
 
 template <typename T>
 void ParameterTree<T>::set(const std::string& index, const std::string& value)
 {
-    parameter(index)->from_string(value);
+    {
+        std::lock_guard<std::mutex> guard(lock_);
+        auto p = parameter(parse_index(index));
+        if (!p) {
+            throw ParameterNotFound(index);
+        }
+        p->from_string(value);
+    }
     commit_model_changes();
 }
 
@@ -367,7 +430,78 @@ std::string ParameterTree<T>::debug_string(const std::string& index)
 template <typename T>
 void ParameterTree<T>::enable_inform(bool enable)
 {
+    std::lock_guard<std::mutex> guard(lock_);
     model_->profile()->inform_enabled = enable;
+}
+
+template <typename T>
+void ParameterTree<T>::enable_subtree_inline(bool enable)
+{
+    // 用序列化闸门而非数据锁: subtree_inline 只在序列化遍历时被后端读取(闸门保护),
+    // 与 protobuf build_schema 的临时切换保持一致
+    std::lock_guard<std::recursive_mutex> gate(serialize_lock_);
+    model_->profile()->subtree_inline = enable;
+}
+
+template <typename T>
+bool ParameterTree<T>::subtree_inline() const
+{
+    std::lock_guard<std::recursive_mutex> gate(serialize_lock_);
+    return model_->profile()->subtree_inline;
+}
+
+template <typename T>
+void ParameterTree<T>::reload_subtree(const std::string& index, ParameterSerdesType type)
+{
+    {
+        std::lock_guard<std::recursive_mutex> gate(serialize_lock_); // 序列化闸门
+        std::lock_guard<std::mutex> guard(lock_);
+        auto p = parameter(parse_index(index));
+        if (!p) {
+            return;
+        }
+        auto* sub = dynamic_cast<Subtree*>(p.get());
+        if (!sub || sub->path.empty()) {
+            return;
+        }
+        model_->profile()->serdes_type = type; // 子节点反序列化走对应后端(无扩展名时回退主格式)
+        sub->load(type);
+    }
+
+    commit_model_changes(); // model -> value_, 使后续 save 的 commit_value_changes 不会用旧缓存覆盖
+}
+
+template <typename T>
+std::vector<std::string> ParameterTree<T>::subtree_indices()
+{
+    std::lock_guard<std::mutex> guard(lock_);
+    std::vector<std::string> indices;
+    std::function<void(const std::shared_ptr<Parameter>&)> walk = [&indices, &walk](const std::shared_ptr<Parameter>& p) {
+        if (dynamic_cast<Subtree*>(p.get()) != nullptr) {
+            indices.push_back(p->index());
+        }
+        for (const auto& child_pair : p->children()) {
+            walk(child_pair.second);
+        }
+    };
+    walk(model_);
+    return indices;
+}
+
+template <typename T>
+bool ParameterTree<T>::visit_subtree(const std::string& index, const std::function<void(Subtree&)>& visitor)
+{
+    std::lock_guard<std::mutex> guard(lock_);
+    auto p = parameter(parse_index(index));
+    if (!p) {
+        return false;
+    }
+    auto* sub = dynamic_cast<Subtree*>(p.get());
+    if (!sub) {
+        return false;
+    }
+    visitor(*sub);
+    return true;
 }
 
 template <typename T>

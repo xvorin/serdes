@@ -11,7 +11,7 @@ class MultiSerdes;
 template <typename T>
 struct Composite : public Parameter {
 public:
-    using SortCompareCallback = std::function<bool(std::shared_ptr<Parameter> a, std::shared_ptr<Parameter> b)>;
+    using SortCompareCallback = Parameter::SortCompareCallback;
     using informant = std::function<void(const std::string&, ParameterInformType pit)>;
 
 public:
@@ -32,7 +32,7 @@ public:
     virtual std::string debug_releation(const std::string& prefix = "") const override;
 
     void insert_child(std::shared_ptr<Parameter> param);
-    std::list<std::shared_ptr<Parameter>> sorted_children(SortCompareCallback cb = nullptr) const;
+    virtual std::list<std::shared_ptr<Parameter>> sorted_children(SortCompareCallback cb = nullptr) const override;
 
 public:
     const informant inform;

@@ -1,8 +1,11 @@
 #pragma once
 
+#include "serdes/serdes/format_type.hpp"
 #include "serdes/utils/exception.hpp"
 
 #include <algorithm>
+#include <functional>
+#include <list>
 #include <memory>
 #include <typeinfo>
 #include <unordered_map>
@@ -15,6 +18,8 @@ namespace xvorin::serdes {
 struct ParameterProfile {
     ParameterSerdesType serdes_type = ParameterSerdesType::PST_STRU; // 序列化行为
     bool inform_enabled = false; // 是否通知变更
+    bool subtree_inline = false; // to_xxx 时 subtree 输出子树内容对象(true)还是路径字符串(false, 默认)
+    bool subtree_sink = false; // 本次序列化是否顺带把 subtree 内容落盘(仅 save 打开; 由序列化闸门保护)
     // bool invalid = false; // 非法变更标记
     std::unordered_map<std::string, std::string> violations;
 };
@@ -87,15 +92,26 @@ public:
     /**
      * 只有基础类型需要实现此方法, 用于value的直接设置
      */
-    virtual void from_string(const std::string& in) { }
+    virtual void from_string(const std::string& in)
+    {
+    }
 
     /**
      * 只有复合类型需要实现以下子节点相关接口
      */
-    virtual void create_child(const std::string& newkey) { throw TypeNotSupport(index() + "." + newkey); }
-    virtual void remove_child(const std::string& subkey) { throw TypeNotSupport(index() + "." + subkey); }
+    virtual void create_child(const std::string& newkey)
+    {
+        throw TypeNotSupport(index() + "." + newkey);
+    }
+    virtual void remove_child(const std::string& subkey)
+    {
+        throw TypeNotSupport(index() + "." + subkey);
+    }
 
-    virtual std::shared_ptr<Parameter> find_child(const std::string& subkey) const { return nullptr; }
+    virtual std::shared_ptr<Parameter> find_child(const std::string& subkey) const
+    {
+        return nullptr;
+    }
     virtual const std::unordered_map<std::string, std::shared_ptr<Parameter>>& children() const
     {
         static const std::unordered_map<std::string, std::shared_ptr<Parameter>> empty_children;
@@ -107,12 +123,26 @@ public:
     }
 
     /**
+     * 按顺序(默认 offset, 即成员声明顺序)取子节点; 复合节点可覆盖以使用自身策略
+     */
+    using SortCompareCallback = std::function<bool(std::shared_ptr<Parameter>, std::shared_ptr<Parameter>)>;
+    virtual std::list<std::shared_ptr<Parameter>> sorted_children(SortCompareCallback cb = nullptr) const;
+
+    /**
      * 参数变更通知
      */
-    virtual void inform_ancestor(const std::string& index, ParameterInformType pit) const { }
+    virtual void inform_ancestor(const std::string& index, ParameterInformType pit) const
+    {
+    }
 
-    std::string readable_type() const { return readable_type(type); }
-    std::string readable_detail_type() const { return readable_detail_type(detail); }
+    std::string readable_type() const
+    {
+        return readable_type(type);
+    }
+    std::string readable_detail_type() const
+    {
+        return readable_detail_type(detail);
+    }
 
     /**
      * 获取参数索引
@@ -124,7 +154,11 @@ public:
     }
 
     /**
-     * 获取参数树整体行为
+     * 获取参数树整体行为。
+     * 注意: 返回的 profile 是树内共享状态, 其字段只能由库在锁内修改
+     * (enable_inform/enable_subtree_inline 在数据锁内; save 在序列化闸门内设置 subtree_sink;
+     * serdes_type 由序列化调用时写入)。外部请勿直接写, 否则与并发序列化形成数据竞争,
+     * 且 subtree_sink 被外部置位会让普通 to_xxx 误写子树文件。
      */
     std::shared_ptr<ParameterProfile> profile() const
     {
@@ -168,8 +202,9 @@ public:
      */
     static std::string readable_detail_type(const ParameterDetailType& type)
     {
+        // __cxa_demangle 失败(非法名/分配失败)时返回 nullptr, 此时回退原始 mangled 名, 避免 std::string(nullptr) UB
         auto demangled_name = abi::__cxa_demangle(type.get().name(), 0, 0, 0);
-        const auto raw = std::string(demangled_name);
+        const auto raw = demangled_name ? std::string(demangled_name) : std::string(type.get().name());
         std::free(demangled_name);
 
         auto remove_angle_brackets = [](std::string raw, const std::string& key) -> std::string {
@@ -264,6 +299,18 @@ private:
 inline bool sort_parameter_by_offset(std::shared_ptr<Parameter> a, std::shared_ptr<Parameter> b)
 {
     return a->offset < b->offset;
+}
+
+// 子节点按 offset(成员声明顺序)排序; 复合节点可覆盖以使用自身策略
+inline std::list<std::shared_ptr<Parameter>> Parameter::sorted_children(SortCompareCallback cb) const
+{
+    std::list<std::shared_ptr<Parameter>> sorted;
+    for (const auto& child_pair : children()) {
+        sorted.push_back(child_pair.second);
+    }
+
+    sorted.sort(cb ? cb : sort_parameter_by_offset);
+    return sorted;
 }
 
 inline bool sort_parameter_by_subkey(std::shared_ptr<Parameter> a, std::shared_ptr<Parameter> b)

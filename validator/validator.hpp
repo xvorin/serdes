@@ -1,6 +1,7 @@
 #pragma once
 
 #include "serdes/types/traits.hpp"
+#include "serdes/utils/converter.hpp"
 #include "serdes/utils/utils.hpp"
 
 #include <exception>

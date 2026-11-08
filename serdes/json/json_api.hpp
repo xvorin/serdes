@@ -47,12 +47,7 @@ void JsonAPI<T>::from_json(const std::string& s, T* value)
 template <typename T>
 void JsonAPI<T>::from_json(const std::string& index, const std::string& s, T* value)
 {
-    nlohmann::ordered_json jin;
-    try {
-        jin = nlohmann::ordered_json::parse(s);
-    } catch (std::exception& e) {
-        throw ParseJsonException(e.what());
-    }
+    nlohmann::ordered_json jin = json::parse(s);
 
     tree_.deserialize(tree_.parameter(index), &jin, ParameterSerdesType::PST_JSON);
     tree_.commit_model_changes(value);
@@ -72,14 +67,7 @@ std::string JsonAPI<T>::to_json(const std::string& index, int dump)
     nlohmann::ordered_json jout;
     tree_.serialize(tree_.parameter(index), &jout, ParameterSerdesType::PST_JSON);
 
-    std::stringstream ss;
-    try {
-        ss << (dump > 0 ? jout.dump(dump) : jout.dump());
-    } catch (std::exception& e) {
-        throw DumpJsonException(e.what());
-    }
-
-    return ss.str();
+    return json::dump(jout, dump);
 }
 
 template <typename T>
@@ -96,13 +84,6 @@ std::string JsonAPI<T>::to_json(const T& value, const std::string& index, int du
     nlohmann::ordered_json jout;
     tree_.serialize(tree_.parameter(index), &jout, ParameterSerdesType::PST_JSON);
 
-    std::stringstream ss;
-    try {
-        ss << (dump > 0 ? jout.dump(dump) : jout.dump());
-    } catch (std::exception& e) {
-        throw DumpJsonException(e.what());
-    }
-
-    return ss.str();
+    return json::dump(jout, dump);
 }
 }

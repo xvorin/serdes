@@ -1,5 +1,7 @@
 #pragma once
 
+#include "serdes/types/parameter.hpp"
+#include "serdes/types/traits.hpp"
 #include "serdes/utils/utils.hpp"
 
 #include <google/protobuf/compiler/importer.h>
@@ -8,10 +10,23 @@
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <google/protobuf/text_format.h>
 
-#include <inttypes.h>
 #include <string>
 
+#include <inttypes.h>
+
 namespace xvorin::serdes::detail {
+
+// 从 subtree<T> 解出被引用类型 T(供 protobuf inline 模式生成嵌套 message 时取 T 的 message 名);
+// 主模板给出 void 默认, 使三目表达式的两个分支对非 subtree 类型也可编译(运行时仅在 inline 分支使用)
+template <typename T>
+struct SubtreeParam {
+    using type = void;
+};
+
+template <typename T>
+struct SubtreeParam<xvorin::serdes::subtree<T>> {
+    using type = T;
+};
 
 template <typename T, typename E = void>
 struct Pbtraits {
@@ -91,6 +106,19 @@ struct Pbtraits<T, typename std::enable_if<std::is_same<T, uint64_t>::value>::ty
 
 template <typename T>
 struct Pbtraits<T, typename std::enable_if<std::is_same<T, std::string>::value || std::is_same<T, envar>::value>::type> {
+    static std::string type()
+    {
+        return "string";
+    }
+    static std::string value()
+    {
+        return std::string();
+    }
+};
+
+// subtree: protobuf 下仅表达路径字符串, 与 envar 的处理一致
+template <typename T>
+struct Pbtraits<T, typename std::enable_if<is_subtree<T>::value>::type> {
     static std::string type()
     {
         return "string";
@@ -191,6 +219,13 @@ static inline std::string extract_pbmessage_name(const std::string& readable_typ
     std::vector<std::string> pieces;
     xvorin::serdes::utils::split(readable_type, pieces, "::");
     return pieces.empty() ? readable_type : pieces.back();
+}
+
+// subtree inline 模式下的 message 名 = C 的可读类型名末段(与 Pbtraits<is_object>::type() 口径一致)
+template <typename T>
+std::string subtree_message_name()
+{
+    return extract_pbmessage_name(Parameter::readable_detail_type(typeid(typename SubtreeParam<T>::type)));
 }
 
 // 从可读类型名的命名空间自动推导 protobuf package: 去掉最后一段(类型名), 其余用 '.' 连接

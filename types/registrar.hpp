@@ -1,20 +1,18 @@
 #pragma once
 
 #include "serdes/serdes/config.h"
-
 #include "serdes/types/basic.hpp"
+#include "serdes/types/basic_impl.hpp"
+#include "serdes/types/composite_impl.hpp"
 #include "serdes/types/enum.hpp"
+#include "serdes/types/enum_impl.hpp"
 #include "serdes/types/map.hpp"
 #include "serdes/types/object.hpp"
+#include "serdes/types/pointer.hpp"
 #include "serdes/types/prototype.hpp"
 #include "serdes/types/sequence.hpp"
 #include "serdes/types/set.hpp"
-
-#include "serdes/types/pointer.hpp"
-
-#include "serdes/types/basic_impl.hpp"
-#include "serdes/types/composite_impl.hpp"
-#include "serdes/types/enum_impl.hpp"
+#include "serdes/types/subtree_impl.hpp"
 
 namespace xvorin::serdes {
 

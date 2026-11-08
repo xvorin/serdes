@@ -47,14 +47,7 @@ void TomlAPI<T>::from_toml(const std::string& s, T* value)
 template <typename T>
 void TomlAPI<T>::from_toml(const std::string& index, const std::string& s, T* value)
 {
-    toml::ordered_value tin;
-    try {
-        toml::spec spec = toml::spec::v(1, 0, 0);
-        spec.ext_null_value = true; // this allows `key = null` value
-        tin = toml::parse_str(s, spec);
-    } catch (std::exception& e) {
-        throw ParseTomlException(e.what());
-    }
+    ::toml::ordered_value tin = toml::parse(s);
 
     tree_.deserialize(tree_.parameter(index), &tin, ParameterSerdesType::PST_TOML);
     tree_.commit_model_changes(value);
@@ -71,19 +64,10 @@ std::string TomlAPI<T>::to_toml(const std::string& index)
 {
     tree_.commit_value_changes();
 
-    toml::ordered_value tout;
+    ::toml::ordered_value tout;
     tree_.serialize(tree_.parameter(index), &tout, ParameterSerdesType::PST_TOML);
 
-    std::stringstream ss;
-    try {
-        toml::spec spec = toml::spec::v(1, 0, 0);
-        spec.ext_null_value = true; // this allows `key = null` value
-        ss << toml::format(tout, spec);
-    } catch (std::exception& e) {
-        throw DumpTomlException(e.what());
-    }
-
-    return ss.str();
+    return toml::dump(tout);
 }
 
 template <typename T>
@@ -97,18 +81,9 @@ std::string TomlAPI<T>::to_toml(const T& value, const std::string& index)
 {
     tree_.commit_value_changes(value);
 
-    toml::ordered_value tout;
+    ::toml::ordered_value tout;
     tree_.serialize(tree_.parameter(index), &tout, ParameterSerdesType::PST_TOML);
 
-    std::stringstream ss;
-    try {
-        toml::spec spec = toml::spec::v(1, 0, 0);
-        spec.ext_null_value = true; // this allows `key = null` value
-        ss << toml::format(tout, spec);
-    } catch (std::exception& e) {
-        throw DumpTomlException(e.what());
-    }
-
-    return ss.str();
+    return toml::dump(tout);
 }
 }

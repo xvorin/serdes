@@ -19,6 +19,9 @@ ParameterType trait_type()
     if (is_object<T>::value) {
         return ParameterType::PT_OBJECT;
     }
+    if (is_subtree<T>::value) {
+        return ParameterType::PT_OBJECT;
+    }
     if (is_sequence<T>::value) {
         return ParameterType::PT_SEQUENCE;
     }
@@ -138,18 +141,7 @@ std::list<std::shared_ptr<Parameter>> Composite<T>::sorted_children(SortCompareC
     if (!cb) {
         cb = sort_children_strategy;
     }
-
-    if (!cb) {
-        cb = sort_parameter_by_offset;
-    }
-
-    std::list<std::shared_ptr<Parameter>> sorted;
-    for (auto& child : children_) {
-        sorted.push_back(child.second);
-    }
-
-    sorted.sort(cb);
-    return sorted;
+    return Parameter::sorted_children(cb); // 无自定义策略时基类按 offset 排序
 }
 
 }

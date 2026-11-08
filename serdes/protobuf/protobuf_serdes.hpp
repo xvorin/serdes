@@ -421,6 +421,98 @@ class ProtobufSerdes<T, typename std::enable_if<std::is_same<T, envar>::value>::
     }
 };
 
+// subtree: 默认只存取路径字符串; subtree_inline 开启时以嵌套 message 传输子树内容对象
+template <typename T>
+class ProtobufSerdes<T, typename std::enable_if<is_subtree<T>::value>::type> : public Serdes {
+    virtual void serialize(std::shared_ptr<const Parameter> p, void* out) const override
+    {
+        auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
+        if (parameter->profile()->subtree_inline) { // 内联模式: 子树内容以嵌套 message 输出(与 object 分支同构)
+            auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
+            auto parent = ctx.parent_message();
+            if (!parent) { // subtree 作为根(罕见): 以 C 的 message 为根
+                ctx.prepare_root(detail::subtree_message_name<T>());
+                auto current = detail::ProtobufMessage(ctx.root());
+                detail::EnterProtobufMessageGuard guard(ctx, current);
+                for (auto& child : parameter->sorted_children()) {
+                    child->serialize(out);
+                }
+                return;
+            }
+
+            const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+            auto current = (parent->is_repeated()) ? ctx.append_message(parent, field_name)
+                                                   : ctx.mutable_message(parent, field_name);
+            detail::EnterProtobufMessageGuard guard(ctx, current);
+            for (auto& child : parameter->sorted_children()) {
+                child->serialize(out);
+            }
+            return;
+        }
+
+        // 默认: 路径字符串
+        if (parameter->profile()->subtree_sink) { // 保存主配置时顺带落盘
+            parameter->save(parameter->profile()->serdes_type);
+        }
+        auto& ctx = (*static_cast<detail::ProtobufSerdesContext*>(out));
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
+
+        if (parent->is_repeated()) { // repeated 修饰的 subtree
+            detail::protobuf_add_repeated_value(parent->message(), field, parameter->path);
+        } else {
+            detail::protobuf_set_value(parent->message(), field, parameter->path);
+        }
+    }
+
+    virtual void deserialize(std::shared_ptr<Parameter> p, const void* in) override
+    {
+        auto parameter = std::static_pointer_cast<TraitedParameter<T>>(p);
+        if (parameter->profile()->subtree_inline) { // 内联模式: 从嵌套 message 读入子树内容
+            auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
+            auto parent = ctx.parent_message();
+            if (!parent) {
+                auto current = detail::ProtobufMessage(ctx.root());
+                detail::EnterProtobufMessageGuard guard(ctx, current);
+                for (auto& child : parameter->sorted_children()) {
+                    child->deserialize(in);
+                }
+                return;
+            }
+
+            const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+            auto current = (parent->is_repeated()) ? ctx.mutable_repeated_message(parent, field_name, parent->repeat_index())
+                                                   : ctx.mutable_message(parent, field_name);
+            detail::EnterProtobufMessageGuard guard(ctx, current);
+            for (auto& child : parameter->sorted_children()) {
+                child->deserialize(in);
+            }
+            return;
+        }
+
+        // 默认: 路径字符串
+        auto& ctx = (*const_cast<detail::ProtobufSerdesContext*>(static_cast<const detail::ProtobufSerdesContext*>(in)));
+        auto parent = ctx.parent_message();
+        const auto field_name = parent->field_name().empty() ? parameter->subkey : parent->field_name();
+
+        auto field = parent->descriptor()->FindFieldByName(field_name);
+        if (!field) {
+            return;
+        }
+
+        if (parent->is_repeated()) { // repeated 修饰的 subtree
+            parameter->path = detail::protobuf_get_repeated_value<std::string>(parent->message(), field, parent->repeat_index());
+        } else {
+            parameter->path = detail::protobuf_get_value<std::string>(parent->message(), field);
+        }
+    }
+};
+
 // ENUM
 template <typename T>
 class ProtobufSerdes<T, typename std::enable_if<is_enum<T>::value>::type> : public Serdes {

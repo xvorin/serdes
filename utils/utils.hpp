@@ -1,10 +1,18 @@
 #pragma once
 
+#include "serdes/types/extension/envar.hpp"
+
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
+
+#include <unistd.h>
 
 namespace xvorin::serdes::utils {
 
@@ -83,6 +91,51 @@ inline bool is_utf8_string(const std::string& s)
         }
     }
     return true;
+}
+
+// 读取文件全部内容; 异常统一走 utils/exception.hpp: 路径含 ${VAR} 且环境变量缺失抛 EnvarNotExist,
+// 文件缺失抛 BadFile, 均携带出问题的路径串
+inline std::string read_file(const std::string& path)
+{
+    const auto expanded = static_cast<std::string>(envar(path));
+    std::ifstream fin(expanded);
+    if (!fin) {
+        throw BadFile(expanded);
+    }
+    std::stringstream ss;
+    ss << fin.rdbuf();
+    return ss.str();
+}
+
+// 原子写文件: 路径里的 ${VAR} 与读侧一致先展开, 再写"唯一临时文件"并 rename, 避免写一半。
+// 临时名带 pid + 进程内序号: 多进程(含与其他工具并发)各自写各自的临时文件, 互不覆盖;
+// rename 原子替换目标, 读者任意时刻看到的都是完整旧内容或完整新内容, 不会损坏配置文件。
+// 环境变量缺失抛 EnvarNotExist, 写入失败抛 BadFile(均携带展开后的路径)
+inline void write_file_atomic(const std::string& path, const std::string& content)
+{
+    const auto expanded = static_cast<std::string>(envar(path));
+
+    static std::atomic<unsigned long> sequence { 0 };
+    std::stringstream tmp_name;
+    tmp_name << expanded << ".tmp." << static_cast<long>(::getpid()) << "." << sequence.fetch_add(1);
+    const std::string tmp = tmp_name.str();
+
+    {
+        std::ofstream fout(tmp);
+        if (!fout) {
+            throw BadFile(tmp);
+        }
+        fout << content;
+        fout.flush();
+        if (!fout) {
+            std::remove(tmp.c_str());
+            throw BadFile(tmp);
+        }
+    }
+    if (0 != std::rename(tmp.c_str(), expanded.c_str())) {
+        std::remove(tmp.c_str());
+        throw BadFile(expanded);
+    }
 }
 
 } // namespace xvorin::serdes

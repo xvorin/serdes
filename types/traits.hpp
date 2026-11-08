@@ -1,17 +1,17 @@
 #pragma once
 
+#include "serdes/types/extension/buffer.hpp"
+#include "serdes/types/extension/envar.hpp"
+#include "serdes/types/extension/subtree.hpp"
+
 #include <list>
 #include <map>
 #include <memory>
 #include <set>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-#include <type_traits>
-
-#include "serdes/types/extension/buffer.hpp"
-#include "serdes/types/extension/envar.hpp"
 
 namespace xvorin::serdes {
 
@@ -23,27 +23,41 @@ template <typename T>
 struct is_basic : std::integral_constant<bool, std::is_arithmetic<T>::value || std::is_same<T, std::string>::value || is_extension_basic<T>::value> {
 };
 
+// 配置引用: 以对象子树形式挂入参数树, 不属于 basic 也不属于普通 object
+template <typename T>
+struct is_subtree : std::false_type {
+};
+
+template <typename T>
+struct is_subtree<subtree<T>> : std::true_type {
+};
+
 template <typename T>
 struct is_enum : std::integral_constant<bool, std::is_enum<T>::value> {
 };
 
 // 判断是否为 shared_ptr
 template <typename T>
-struct is_shared_ptr : std::false_type { };
+struct is_shared_ptr : std::false_type {
+};
 
 template <typename T>
-struct is_shared_ptr<std::shared_ptr<T>> : std::true_type { };
+struct is_shared_ptr<std::shared_ptr<T>> : std::true_type {
+};
 
 // 判断是否为 unique_ptr
 template <typename T>
-struct is_unique_ptr : std::false_type { };
+struct is_unique_ptr : std::false_type {
+};
 
 template <typename T>
-struct is_unique_ptr<std::unique_ptr<T>> : std::true_type { };
+struct is_unique_ptr<std::unique_ptr<T>> : std::true_type {
+};
 
 // 判断是否为智能指针（shared_ptr 或 unique_ptr）
 template <typename T>
-struct is_smart_ptr : std::integral_constant<bool, is_shared_ptr<T>::value || is_unique_ptr<T>::value> { };
+struct is_smart_ptr : std::integral_constant<bool, is_shared_ptr<T>::value || is_unique_ptr<T>::value> {
+};
 
 template <typename T, typename E = void>
 struct is_vector : std::false_type {
@@ -106,7 +120,7 @@ struct is_set : std::integral_constant<bool, is_rbset<T>::value || is_hashset<T>
 };
 
 template <typename T>
-struct is_object : std::integral_constant<bool, std::is_class<T>::value && !is_basic<T>::value && !is_sequence<T>::value && !is_map<T>::value && !is_set<T>::value && !is_smart_ptr<T>::value> {
+struct is_object : std::integral_constant<bool, std::is_class<T>::value && !is_basic<T>::value && !is_subtree<T>::value && !is_sequence<T>::value && !is_map<T>::value && !is_set<T>::value && !is_smart_ptr<T>::value> {
 };
 
 template <typename T>
@@ -114,7 +128,7 @@ struct is_stl : std::integral_constant<bool, is_sequence<T>::value || is_map<T>:
 };
 
 template <typename T>
-struct is_composite : std::integral_constant<bool, (is_stl<T>::value && !is_smart_ptr<T>::value) || is_object<T>::value> {
+struct is_composite : std::integral_constant<bool, (is_stl<T>::value && !is_smart_ptr<T>::value) || is_object<T>::value || is_subtree<T>::value> {
 };
 
 template <typename T>

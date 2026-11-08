@@ -1,10 +1,11 @@
 #pragma once
 
+#include "serdes/utils/exception.hpp"
+
 #include <cstdlib>
+#include <iostream>
 #include <regex>
 #include <string>
-
-#include <iostream>
 
 namespace xvorin::serdes {
 
@@ -69,7 +70,7 @@ private:
 
         size_t substart = 0;
         for (auto iter = std::sregex_iterator(original.cbegin(), original.cend(), pattern);
-            iter != std::sregex_iterator(); iter++) {
+             iter != std::sregex_iterator(); iter++) {
             const auto env = (*iter)[1].str();
             const char* value = std::getenv(env.c_str());
             if (value == nullptr) { // 环境变量不存在
