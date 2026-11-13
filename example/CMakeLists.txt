@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
 
+# 仅作为根工程子目录编译: 统一在根目录 build/ 产出, 避免在 example/ 里生成 Makefile/CMakeCache.txt 等
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    message(FATAL_ERROR "Build examples from the repository root: cmake -S . -B build -DBUILD_EXAMPLES=ON")
+endif()
+
 set(3RDPATH ${CMAKE_CURRENT_SOURCE_DIR}/../3rd/)
 
 # 文件监听使用 std::thread
@@ -38,6 +43,12 @@ target_link_libraries(simple
 
 add_executable(subtree_demo subtree.cpp)
 target_link_libraries(subtree_demo
+    ${PROTOBUF_LIB}
+    Threads::Threads
+)
+
+add_executable(inform_subtree inform_subtree.cpp)
+target_link_libraries(inform_subtree
     ${PROTOBUF_LIB}
     Threads::Threads
 )

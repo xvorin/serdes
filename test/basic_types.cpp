@@ -48,6 +48,22 @@ static void test_arithmetic_roundtrip()
     CHECK(ep5->get<int16_t>("t5.i16") == -2 && ep5->get<float>("t5.f") == 2.5f);
 }
 
+// 浮点精度: 默认 6 位有效数字会丢精度, 修复后 toml/yaml round-trip 精确一致
+static void test_float_precision_roundtrip()
+{
+    auto ep = create<TBasic>("t");
+    ep->unsafe_value()->d = 25.0000001;
+    ep->commit_value_changes();
+
+    auto ept = create<TBasic>("tt");
+    ept->from_toml(ep->to_toml());
+    CHECK(ept->get<double>("tt.d") == 25.0000001);
+
+    auto epy = create<TBasic>("ty");
+    epy->from_yaml(ep->to_yaml());
+    CHECK(epy->get<double>("ty.d") == 25.0000001);
+}
+
 static void test_string()
 {
     auto ep = create<TBasic>("t");
@@ -129,6 +145,7 @@ static void test_default_verinfo_mismatch()
 int main()
 {
     test_arithmetic_roundtrip();
+    test_float_precision_roundtrip();
     test_string();
     test_buffer();
     test_envar();

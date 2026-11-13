@@ -129,9 +129,13 @@ public:
     virtual std::list<std::shared_ptr<Parameter>> sorted_children(SortCompareCallback cb = nullptr) const;
 
     /**
-     * 参数变更通知
+     * 参数变更通知: 由容器序列化同步时触发, 沿父链上抛。
+     * @param node 事件关联节点; PIT_CREATE/PIT_CHANGE 传节点, PIT_REMOVE 时节点已移除传 nullptr。
+     *             set 的增删事件不携带节点(由值集合比对产生, 无稳定元素节点/索引), 均传 nullptr, 索引为容器索引。
+     *             回调在数据锁内执行, 只能直接读写节点, 禁止调用任何树 API
      */
-    virtual void inform_ancestor(const std::string& index, ParameterInformType pit) const
+    virtual void inform_ancestor(const std::string& index, ParameterInformType pit,
+        const std::shared_ptr<Parameter>& node = nullptr) const
     {
     }
 

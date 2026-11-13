@@ -3,6 +3,20 @@
 以C++数据类型(结构体、STL、基础数据类型)为核心，非侵入式地实现C++数据结构与json/yaml/protobuf/toml/...等序列化格式的互转
 
 
+# 构建
+统一在仓库根目录的 `build/` 下做 out-of-source 构建，源码目录不产生 Makefile/CMakeCache.txt 等产物：
+```bash
+cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTS=ON
+cmake --build build -j8
+```
+- 示例程序输出到 `build/example/`
+- 单元测试输出到 `build/test/`，执行：
+```bash
+cd build && ctest --output-on-failure
+```
+- `BUILD_EXAMPLES`/`BUILD_TESTS` 默认均为 OFF，不需要时省略对应参数
+- 不要在 `example/` 内直接执行 `cmake .`：该目录被禁止独立配置，会提示从根目录构建
+
 # 简单示例
 ```
 #include <serdes/serdes.h>

@@ -44,11 +44,12 @@ void EnumParameter<T>::from_string(const std::string& in)
 }
 
 template <typename T>
-void EnumParameter<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
+void EnumParameter<T>::inform_ancestor(const std::string& index, ParameterInformType pit,
+    const std::shared_ptr<Parameter>& node) const
 {
     auto p = parent.lock();
     if (p) {
-        p->inform_ancestor(index, pit);
+        p->inform_ancestor(index, pit, node);
     }
 }
 

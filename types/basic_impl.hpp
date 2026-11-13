@@ -2,7 +2,6 @@
 
 #include "serdes/serdes/multi_serdes.hpp"
 #include "serdes/types/basic.hpp"
-
 #include "serdes/utils/converter.hpp"
 
 namespace xvorin::serdes {
@@ -44,11 +43,12 @@ void BasicParameter<T>::from_string(const std::string& in)
 }
 
 template <typename T>
-void BasicParameter<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
+void BasicParameter<T>::inform_ancestor(const std::string& index, ParameterInformType pit,
+    const std::shared_ptr<Parameter>& node) const
 {
     auto p = parent.lock();
     if (p) {
-        p->inform_ancestor(index, pit);
+        p->inform_ancestor(index, pit, node);
     }
 }
 

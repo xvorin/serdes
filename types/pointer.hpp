@@ -9,7 +9,9 @@ namespace xvorin::serdes {
 template <typename T>
 struct TraitedParameter<T, typename std::enable_if<is_smart_ptr<T>::value>::type> : public Parameter {
     using subtype = typename T::element_type;
-    using informant = std::function<void(const std::string&, ParameterInformType pit)>;
+    // PIT 事件回调: (index, pit, node); node 在 PIT_REMOVE(及 set 元素增删)时为 nullptr
+    using informant = std::function<void(const std::string&, ParameterInformType pit,
+        const std::shared_ptr<Parameter>& node)>;
 
     TraitedParameter(std::string subkey, size_t offset,
         std::string comment, informant inform, std::string verinfo)
@@ -60,6 +62,19 @@ struct TraitedParameter<T, typename std::enable_if<is_smart_ptr<T>::value>::type
     virtual std::shared_ptr<Parameter> find_child(const std::string& subkey) const override
     {
         return value;
+    }
+
+    // 与 Composite 一致: 调用自身 inform 后沿父链上抛, 指针内子节点的事件不会被吞掉
+    virtual void inform_ancestor(const std::string& index, ParameterInformType pit,
+        const std::shared_ptr<Parameter>& node) const override
+    {
+        if (inform) {
+            inform(index, pit, node);
+        }
+        auto p = parent.lock();
+        if (p) {
+            p->inform_ancestor(index, pit, node);
+        }
     }
 
     T make_smart_ptr() const

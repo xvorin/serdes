@@ -1,6 +1,9 @@
 build
 install
 
+CMakeCache.txt
+CMakeFiles
+
 # Prerequisites
 *.d
 

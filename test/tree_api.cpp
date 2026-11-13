@@ -1,6 +1,10 @@
 #include "definitions.hpp"
 #include "util.hpp"
 
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
 #include <vector>
 
 using namespace xvorin::serdes;
@@ -104,6 +108,93 @@ static void test_inform_notifications()
     CHECK(ep2->value().y == 0); // 结构体侧未被接受
 }
 
+// 指针成员 + inform: 指针内子节点事件应沿父链上抛到指针节点注册的回调(3 参: 带 node)
+static std::vector<std::string> g_ptr_events;
+static void on_ptr_inform(const std::string& index, ParameterInformType pit, const std::shared_ptr<Parameter>& node)
+{
+    const char* name = (pit == ParameterInformType::PIT_CREATE) ? "create"
+        : (pit == ParameterInformType::PIT_REMOVE)              ? "remove"
+                                                                : "change";
+    g_ptr_events.push_back(std::string(name) + ":" + index + (node ? ":node" : ":null"));
+}
+
+struct PtrInner {
+    int v = 1;
+};
+struct PtrRoot {
+    std::shared_ptr<PtrInner> inner = std::make_shared<PtrInner>();
+};
+DEFINE_PARAM(PtrInner, v, "v")
+DEFINE_PARAM(PtrRoot, inner, "指针", on_ptr_inform)
+
+static void test_ptr_inform_propagation()
+{
+    g_ptr_events.clear();
+    auto ep = create<PtrRoot>("pr");
+    ep->enable_inform(true);
+    ep->set("pr.inner.0.v", "2"); // 指针内子节点用 0 键; PIT_CHANGE 从 v 上抛到 inner 指针的 inform
+    CHECK(!g_ptr_events.empty());
+    CHECK_STR_CONTAINS(g_ptr_events.back(), "change:pr.inner.0.v:node");
+}
+
+// 容器元素增删: PIT_CREATE 带节点, PIT_REMOVE 节点为 null
+static std::vector<std::string> g_map_events;
+static void on_map_inform(const std::string& index, ParameterInformType pit, const std::shared_ptr<Parameter>& node)
+{
+    const char* name = (pit == ParameterInformType::PIT_CREATE) ? "create"
+        : (pit == ParameterInformType::PIT_REMOVE)              ? "remove"
+                                                                : "change";
+    g_map_events.push_back(std::string(name) + ":" + index + (node ? ":node" : ":null"));
+}
+
+struct MapRoot {
+    std::map<int, int> m;
+};
+DEFINE_PARAM(MapRoot, m, "map", on_map_inform)
+
+static void test_container_inform_node()
+{
+    g_map_events.clear();
+    auto ep = create<MapRoot>("rm");
+    ep->enable_inform(true);
+    ep->create("rm.m.5");
+    CHECK(g_map_events.size() == 1);
+    CHECK_STR_CONTAINS(g_map_events[0], "create:rm.m.5:node");
+
+    ep->remove("rm.m.5");
+    CHECK(g_map_events.size() == 2);
+    CHECK_STR_CONTAINS(g_map_events[1], "remove:rm.m.5:null");
+}
+
+// set 元素不是独立节点: 增删事件 node 均为 null, 索引为容器索引
+static std::vector<std::string> g_set_events;
+static void on_set_inform(const std::string& index, ParameterInformType pit, const std::shared_ptr<Parameter>& node)
+{
+    const char* name = (pit == ParameterInformType::PIT_CREATE) ? "create"
+        : (pit == ParameterInformType::PIT_REMOVE)              ? "remove"
+                                                                : "change";
+    g_set_events.push_back(std::string(name) + ":" + index + (node ? ":node" : ":null"));
+}
+
+struct SetRoot {
+    std::set<int> s;
+};
+DEFINE_PARAM(SetRoot, s, "set", on_set_inform)
+
+static void test_set_inform_node()
+{
+    g_set_events.clear();
+    auto ep = create<SetRoot>("rs");
+    ep->enable_inform(true);
+    ep->create("rs.s.0");
+    CHECK(g_set_events.size() == 1);
+    CHECK_STR_CONTAINS(g_set_events[0], "create:rs.s:null");
+
+    ep->remove("rs.s.0");
+    CHECK(g_set_events.size() == 2);
+    CHECK_STR_CONTAINS(g_set_events[1], "remove:rs.s:null");
+}
+
 static void test_debug_string()
 {
     auto ep = create<TFileRoot>("r");
@@ -121,6 +212,9 @@ int main()
     test_value_bidirectional_sync();
     test_command_line();
     test_inform_notifications();
+    test_ptr_inform_propagation();
+    test_container_inform_node();
+    test_set_inform_node();
     test_debug_string();
     std::cout << "[OK] tree_api" << std::endl;
     return 0;

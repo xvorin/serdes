@@ -91,14 +91,15 @@ std::unordered_map<std::string, std::shared_ptr<Parameter>>* Composite<T>::mutab
 }
 
 template <typename T>
-void Composite<T>::inform_ancestor(const std::string& index, ParameterInformType pit) const
+void Composite<T>::inform_ancestor(const std::string& index, ParameterInformType pit,
+    const std::shared_ptr<Parameter>& node) const
 {
     if (inform) {
-        inform(index, pit);
+        inform(index, pit, node);
     }
     auto p = parent.lock();
     if (p) {
-        p->inform_ancestor(index, pit);
+        p->inform_ancestor(index, pit, node);
     }
 }
 

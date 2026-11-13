@@ -12,7 +12,9 @@ template <typename T>
 struct Composite : public Parameter {
 public:
     using SortCompareCallback = Parameter::SortCompareCallback;
-    using informant = std::function<void(const std::string&, ParameterInformType pit)>;
+    // PIT 事件回调: (index, pit, node); node 在 PIT_REMOVE(及 set 元素增删)时为 nullptr
+    using informant = std::function<void(const std::string&, ParameterInformType pit,
+        const std::shared_ptr<Parameter>& node)>;
 
 public:
     Composite(std::string subkey, ParameterDetailType detail, size_t offset, std::string comment, informant inform, std::string verinfo);
@@ -26,7 +28,8 @@ public:
     virtual const std::unordered_map<std::string, std::shared_ptr<Parameter>>& children() const override;
     virtual std::unordered_map<std::string, std::shared_ptr<Parameter>>* mutable_children() override;
 
-    virtual void inform_ancestor(const std::string& index, ParameterInformType pit) const override;
+    virtual void inform_ancestor(const std::string& index, ParameterInformType pit,
+        const std::shared_ptr<Parameter>& node) const override;
 
     virtual std::string debug_self() const override;
     virtual std::string debug_releation(const std::string& prefix = "") const override;

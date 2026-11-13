@@ -587,6 +587,68 @@ static void test_subtree_self_suppression()
     CHECK(ep->get<int>("r.sub.x") == 42);
 }
 
+// inform 与子树容器: PIT_CREATE 在序列化前触发, 回调里给子树节点赋 path 应被随后的序列化同步并落盘
+struct TInformCfg {
+    int x = 1;
+};
+
+struct TInformRoot {
+    std::map<std::string, subtree<TInformCfg>> items;
+};
+
+static std::string g_inform_dir;
+static std::vector<std::string> g_inform_events;
+
+static void on_items_inform(const std::string& index, ParameterInformType pit, const std::shared_ptr<Parameter>& node)
+{
+    const char* name = (pit == ParameterInformType::PIT_CREATE) ? "create"
+        : (pit == ParameterInformType::PIT_REMOVE)              ? "remove"
+                                                                : "change";
+    g_inform_events.push_back(std::string(name) + ":" + index + (node ? ":node" : ":null"));
+
+    // 只处理 items 的直接子元素: ir.items.<key>(子孙事件忽略)
+    const std::string prefix = "ir.items.";
+    if (pit != ParameterInformType::PIT_CREATE || 0 != index.compare(0, prefix.size(), prefix)
+        || index.find('.', prefix.size()) != std::string::npos) {
+        return;
+    }
+
+    auto* sub = dynamic_cast<Subtree*>(node.get());
+    if (sub) {
+        sub->path = g_inform_dir + "/item_" + index.substr(prefix.size()) + ".json";
+    }
+}
+
+DEFINE_PARAM(TInformCfg, x, "x")
+DEFINE_PARAM(TInformRoot, items, "items", on_items_inform)
+
+static void test_inform_before_serialize()
+{
+    const std::string dir = testutil::make_dir("unit_subtree_inform");
+    g_inform_dir = dir;
+    g_inform_events.clear();
+
+    auto ep = create<TInformRoot>("ir");
+    ep->enable_inform(true);
+    ep->set_sink_file(dir + "/main.json", ParameterSerdesType::PST_JSON);
+
+    // create 触发 PIT_CREATE(node 非空), 回调赋 path 后由序列化同步进结构体
+    ep->create("ir.items.a");
+    CHECK(!g_inform_events.empty());
+    CHECK_STR_CONTAINS(g_inform_events.back(), "create:ir.items.a:node");
+    CHECK(ep->value().items.at("a")._subtree_sink_path_ == dir + "/item_a.json");
+
+    // save 按回调赋的 path 写回子文件
+    ep->save();
+    CHECK_STR_CONTAINS(testutil::read_file(dir + "/item_a.json"), "\"x\": 1");
+
+    // remove 触发 PIT_REMOVE, 元素节点已销毁 -> node 为 nullptr
+    g_inform_events.clear();
+    ep->remove("ir.items.a");
+    CHECK(g_inform_events.size() == 1);
+    CHECK_STR_CONTAINS(g_inform_events[0], "remove:ir.items.a:null");
+}
+
 int main()
 {
     test_single_subtree_json();
@@ -609,6 +671,7 @@ int main()
     test_subtree_monitor();
     test_subtree_injected_sink();
     test_main_sink_injection();
+    test_inform_before_serialize();
     std::cout << "[OK] subtree" << std::endl;
     return 0;
 }

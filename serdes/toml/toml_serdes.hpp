@@ -5,7 +5,9 @@
 
 #include <serdes/3rd/toml11/toml.hpp>
 
+#include <limits>
 #include <sstream>
+#include <type_traits>
 
 namespace xvorin::serdes {
 
@@ -20,11 +22,27 @@ class TomlSerdes<T, typename std::enable_if<is_basic<T>::value && !is_extension_
     {
         auto parameter = std::static_pointer_cast<const TraitedParameter<T>>(p);
         auto& tout = (*static_cast<::toml::ordered_value*>(out));
-        tout = parameter->value;
+        assign(tout, parameter->value, typename std::is_floating_point<T>::type());
 
         if (!parameter->comment.empty()) {
             tout.comments().push_back(parameter->comment);
         }
+    }
+
+private:
+    // 浮点: toml11 默认只输出 6 位有效数字会丢精度, 显式用 max_digits10(可往返);
+    // 模板按调用方实例化, 避免非浮点类型也实例化浮点构造
+    template <typename U>
+    static void assign(::toml::ordered_value& out, const U& v, std::true_type)
+    {
+        ::toml::floating_format_info fmt;
+        fmt.prec = std::numeric_limits<U>::max_digits10;
+        out = ::toml::ordered_value(v, fmt);
+    }
+    template <typename U>
+    static void assign(::toml::ordered_value& out, const U& v, std::false_type)
+    {
+        out = v;
     }
 
     template <typename V>
@@ -349,7 +367,6 @@ private:
         }
     }
 };
-
 
 // ---- 文本 <-> DOM(供 api 与子树内容读写共用) ----
 // 注意: 本文件位于 xvorin::serdes::toml 内, 引用 toml11 必须写全 ::toml::

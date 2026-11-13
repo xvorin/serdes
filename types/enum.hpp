@@ -24,7 +24,8 @@ public:
 
     virtual void from_string(const std::string& in) override;
 
-    virtual void inform_ancestor(const std::string& index, ParameterInformType pit) const override;
+    virtual void inform_ancestor(const std::string& index, ParameterInformType pit,
+        const std::shared_ptr<Parameter>& node) const override;
 
     virtual std::string debug_self() const override;
     virtual std::string debug_releation(const std::string& prefix = "") const override;

@@ -10,6 +10,30 @@ template <typename T, typename E = void> //[T]ype & [E]nable
 class StructSerdes : public Serdes {
 };
 
+// 变更通知作用域守卫: 序列化容器期间临时关闭 inform, 析构时恢复。
+// 用 RAII 而非裸赋值, 序列化/回调抛异常时不会把全树的通知永久关死。
+class InformDisabler {
+public:
+    explicit InformDisabler(std::shared_ptr<ParameterProfile> profile)
+        : profile_(std::move(profile))
+        , previous_(profile_->inform_enabled)
+    {
+        profile_->inform_enabled = false;
+    }
+
+    ~InformDisabler()
+    {
+        profile_->inform_enabled = previous_;
+    }
+
+    InformDisabler(const InformDisabler&) = delete;
+    InformDisabler& operator=(const InformDisabler&) = delete;
+
+private:
+    std::shared_ptr<ParameterProfile> profile_;
+    bool previous_;
+};
+
 // BASIC
 template <typename T>
 class StructSerdes<T, typename std::enable_if<is_basic<T>::value>::type> : public Serdes {
@@ -41,13 +65,15 @@ private:
 
         if (!parameter->inform) {
             sout = parameter->value;
-            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE);
+            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE,
+                std::const_pointer_cast<Parameter>(p));
             return;
         }
 
         if (parameter->inform(parameter->index(), sout, parameter->value)) {
             sout = parameter->value;
-            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE);
+            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE,
+                std::const_pointer_cast<Parameter>(p));
             return;
         }
 
@@ -96,13 +122,15 @@ private:
 
         if (!parameter->inform) {
             sout = parameter->value;
-            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE);
+            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE,
+                std::const_pointer_cast<Parameter>(p));
             return;
         }
 
         if (parameter->inform(parameter->index(), sout, parameter->value)) {
             sout = parameter->value;
-            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE);
+            parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CHANGE,
+                std::const_pointer_cast<Parameter>(p));
             return;
         }
 
@@ -188,14 +216,13 @@ class StructSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : pu
         for (auto& child : parameter->sorted_children()) {
             if (sout.size() <= counter) {
                 sout.emplace_back();
-                const auto premitive = parameter->profile()->inform_enabled;
-                parameter->profile()->inform_enabled = false;
-                child->serialize(&sout.back());
-                parameter->profile()->inform_enabled = premitive;
+                // 先通知再序列化: 回调里对节点的直接修改(path/字段)会被随后的序列化同步进结构体
                 if (parameter->profile()->inform_enabled) {
                     const auto subkey = parameter->index() + "." + std::to_string(counter);
-                    parameter->inform_ancestor(subkey, ParameterInformType::PIT_CREATE);
+                    parameter->inform_ancestor(subkey, ParameterInformType::PIT_CREATE, child);
                 }
+                InformDisabler disabler(parameter->profile());
+                child->serialize(&sout.back());
             } else {
                 auto iter = sout.begin();
                 for (size_t i = 0; i < counter; i++) {
@@ -210,7 +237,7 @@ class StructSerdes<T, typename std::enable_if<is_sequence<T>::value>::type> : pu
             sout.pop_back();
             if (parameter->profile()->inform_enabled) {
                 const auto subkey = parameter->index() + "." + std::to_string(sout.size());
-                parameter->inform_ancestor(subkey, ParameterInformType::PIT_REMOVE);
+                parameter->inform_ancestor(subkey, ParameterInformType::PIT_REMOVE, nullptr);
             }
         }
     }
@@ -244,12 +271,13 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
         std::set<typename T::key_type> subkeys;
         for (const auto& child : parameter->children()) {
             auto subkey = Converter<typename T::key_type>::from_string(child.first);
-            if (sout.find(subkey) == sout.end() && parameter->profile()->inform_enabled) {
-                const auto premitive = parameter->profile()->inform_enabled;
-                parameter->profile()->inform_enabled = false;
+            if (sout.find(subkey) == sout.end()) {
+                // 先通知再序列化: 回调里对节点的直接修改(path/字段)会被随后的序列化同步进结构体
+                if (parameter->profile()->inform_enabled) {
+                    parameter->inform_ancestor(child.second->index(), ParameterInformType::PIT_CREATE, child.second);
+                }
+                InformDisabler disabler(parameter->profile());
                 child.second->serialize(&sout[subkey]);
-                parameter->profile()->inform_enabled = premitive;
-                parameter->inform_ancestor(child.second->index(), ParameterInformType::PIT_CREATE);
             } else {
                 child.second->serialize(&sout[subkey]);
             }
@@ -261,7 +289,7 @@ class StructSerdes<T, typename std::enable_if<is_map<T>::value>::type> : public 
                 const auto subkey = parameter->index() + "." + Converter<typename T::key_type>::to_string(iter->first);
                 iter = sout.erase(iter);
                 if (parameter->profile()->inform_enabled) {
-                    parameter->inform_ancestor(subkey, ParameterInformType::PIT_REMOVE);
+                    parameter->inform_ancestor(subkey, ParameterInformType::PIT_REMOVE, nullptr);
                 }
             } else {
                 iter++;
@@ -297,22 +325,22 @@ class StructSerdes<T, typename std::enable_if<is_set<T>::value>::type> : public 
 
         for (auto& child : parameter->sorted_children()) {
             typename T::value_type schild;
-            const auto premitive = parameter->profile()->inform_enabled;
-            parameter->profile()->inform_enabled = false;
+            InformDisabler disabler(parameter->profile());
             child->serialize(&schild);
-            parameter->profile()->inform_enabled = premitive;
             nout.insert(schild);
         }
 
+        // set 的增删由值集合比对得出, 无法回指元素节点(REMOVE 时节点已销毁, CREATE 未保留值->节点映射),
+        // 且 child subkey 会整体重编号、没有稳定元素索引: node 一律为 nullptr, 索引为容器索引
         for (auto& v : sout) {
             if (nout.find(v) == nout.end() && parameter->profile()->inform_enabled) {
-                parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_REMOVE);
+                parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_REMOVE, nullptr);
             }
         }
 
         for (auto& v : nout) {
             if (sout.find(v) == sout.end() && parameter->profile()->inform_enabled) {
-                parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CREATE);
+                parameter->inform_ancestor(parameter->index(), ParameterInformType::PIT_CREATE, nullptr);
             }
         }
 

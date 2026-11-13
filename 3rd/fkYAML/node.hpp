@@ -10645,6 +10645,7 @@ FK_YAML_DETAIL_NAMESPACE_END
 #define FK_YAML_DETAIL_OUTPUT_SERIALIZER_HPP
 
 #include <cmath>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -10666,6 +10667,7 @@ FK_YAML_DETAIL_NAMESPACE_END
 #include <cmath>
 #include <limits>
 #include <string>
+#include <iomanip>
 #include <sstream>
 #include <type_traits>
 
@@ -10732,9 +10734,17 @@ inline enable_if_t<std::is_floating_point<FloatType>::value> to_string(FloatType
         return;
     }
 
+#if FK_YAML_HAS_TO_CHARS
+    // std::to_chars: 最短可往返表示(与 JSON 风格一致)
+    char buf[64];
+    const auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), v);
+    s.assign(buf, static_cast<std::size_t>(ptr - buf));
+#else
     std::ostringstream oss;
-    oss << v;
+    // 默认 6 位有效数字会丢精度(如 25.0000001 -> 25.0); 用 max_digits10 保证可往返
+    oss << std::setprecision(std::numeric_limits<FloatType>::max_digits10) << v;
     s = oss.str();
+#endif
 
     // If `v` is actually an integer and no scientific notation is used for serialization, ".0" must be appended.
     // The result would cause a roundtrip issue otherwise. https://github.com/fktn-k/fkYAML/issues/405
