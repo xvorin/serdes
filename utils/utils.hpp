@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 namespace xvorin::serdes::utils {
@@ -107,6 +109,36 @@ inline std::string read_file(const std::string& path)
     return ss.str();
 }
 
+// 递归创建目录(已存在则忽略); 失败由后续写入报错
+inline void ensure_directories(const std::string& dir)
+{
+    if (dir.empty()) {
+        return;
+    }
+
+    std::string current;
+    size_t pos = 0;
+    if (dir.front() == '/') {
+        current = "/";
+        pos = 1;
+    }
+    while (pos <= dir.size()) {
+        const auto next = dir.find('/', pos);
+        const auto part = dir.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+        if (!part.empty()) {
+            if (!current.empty() && current.back() != '/') {
+                current += '/';
+            }
+            current += part;
+            ::mkdir(current.c_str(), 0755);
+        }
+        if (next == std::string::npos) {
+            break;
+        }
+        pos = next + 1;
+    }
+}
+
 // 原子写文件: 路径里的 ${VAR} 与读侧一致先展开, 再写"唯一临时文件"并 rename, 避免写一半。
 // 临时名带 pid + 进程内序号: 多进程(含与其他工具并发)各自写各自的临时文件, 互不覆盖;
 // rename 原子替换目标, 读者任意时刻看到的都是完整旧内容或完整新内容, 不会损坏配置文件。
@@ -114,6 +146,12 @@ inline std::string read_file(const std::string& path)
 inline void write_file_atomic(const std::string& path, const std::string& content)
 {
     const auto expanded = static_cast<std::string>(envar(path));
+
+    // 目标目录不存在时先创建(子树文件首次落盘等场景)
+    const auto slash = expanded.find_last_of('/');
+    if (slash != std::string::npos && slash > 0) {
+        ensure_directories(expanded.substr(0, slash));
+    }
 
     static std::atomic<unsigned long> sequence { 0 };
     std::stringstream tmp_name;

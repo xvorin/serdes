@@ -9,6 +9,7 @@
 #include "serdes/types/subtree.hpp"
 #include "serdes/types/traits.hpp"
 
+#include <iostream>
 #include <sstream>
 
 namespace xvorin::serdes {
@@ -176,7 +177,19 @@ struct TraitedParameter<subtree<T>, typename std::enable_if<is_subtree<subtree<T
         const auto saved_type = prof->serdes_type;
         prof->serdes_type = fmt;
 
-        const auto content = target->read();
+        std::string content;
+        try {
+            content = target->read();
+        } catch (const BadFile&) {
+            prof->serdes_type = saved_type;
+            // 子文件缺失: 按当前(默认)值写一份回去, 目录不存在时自动创建, 保证配置树继续加载
+            try {
+                save(type);
+            } catch (const std::exception& e) {
+                std::cerr << "write default subtree " << path << " failed: " << e.what() << std::endl;
+            }
+            return;
+        }
 
         // 自激抑制: 内容与最近一次写回一致(如 save 刚写回触发的监控事件)时无需重载
         if (content == this->sink_content) {
